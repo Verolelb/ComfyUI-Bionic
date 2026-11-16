@@ -7,6 +7,7 @@ Un tchat façon Bionic (LM Studio) directement dans ComfyUI, avec entrée audio,
 ## Fonctionnalités
 
 - Panneau de chat flottant branché sur le serveur local de LM Studio (modèles texte et vision).
+- Interface en français ou en anglais, réglable dans ⚙ (langue du panneau et de la node).
 - Réponses en streaming, raisonnement repliable, choix du modèle dans le panneau.
 - Entrée vision : bouton 🖼, collage `Ctrl+V` ou glisser-déposer d'images.
 - Entrée audio : bouton 🎙, enregistrement du micro et transcription locale (faster-whisper).
@@ -56,6 +57,7 @@ Si aucune node **Bionic Chat Prompt** n'est présente dans le graphe, elle est c
 
 Le bouton ⚙ du panneau permet de modifier :
 
+- la langue de l'interface (français ou anglais) ;
 - l'URL du serveur LM Studio ;
 - le prompt système ;
 - la température ;

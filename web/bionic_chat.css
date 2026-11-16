@@ -362,7 +362,7 @@
 }
 
 #bionic-panel.bionic-drop::after {
-  content: "Dépose une image";
+  content: attr(data-drop-label);
   position: absolute;
   inset: 8px;
   display: flex;

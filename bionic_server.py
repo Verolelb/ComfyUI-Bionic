@@ -44,6 +44,7 @@ CONFIG_DEFAULTS = {
     "auto_run": True,
     "auto_send_audio": True,
     "web_enabled": False,
+    "language": "fr",
 }
 
 _WHISPER_MODELS = {}
@@ -84,6 +85,8 @@ def save_config(patch):
             config[key] = max(1, int(value))
         else:
             config[key] = str(value)[:8000]
+    if "language" in patch:
+        config["language"] = "en" if str(patch["language"]).lower().startswith("en") else "fr"
     config["base_url"] = config["base_url"].rstrip("/")
     path = _config_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -92,12 +95,53 @@ def save_config(patch):
     return config
 
 
+_UI_TEXT = {
+    "fr": {
+        "tool_search": "🔎 Recherche web : {query}",
+        "tool_open": "🌐 Ouverture : {url}",
+        "models_refused": "LM Studio a refusé la liste des modèles.",
+        "no_model": "Aucun modèle de chat n'est disponible dans LM Studio.",
+        "connect_error": "LM Studio injoignable sur {base_url}.",
+        "status_error": "LM Studio injoignable ({error})",
+        "messages_missing": "Messages manquants.",
+        "audio_invalid": "Audio invalide.",
+        "audio_empty": "Audio vide.",
+        "audio_too_long": "Audio trop long (30 Mo maximum).",
+        "audio_invalid_detail": "Audio invalide : {error}",
+        "whisper_missing": "faster-whisper n'est pas installé dans le Python de ComfyUI.",
+        "transcribe_failed": "Transcription impossible : {error}",
+    },
+    "en": {
+        "tool_search": "🔎 Web search: {query}",
+        "tool_open": "🌐 Opening: {url}",
+        "models_refused": "LM Studio rejected the model list.",
+        "no_model": "No chat model is available in LM Studio.",
+        "connect_error": "LM Studio unreachable at {base_url}.",
+        "status_error": "LM Studio unreachable ({error})",
+        "messages_missing": "Missing messages.",
+        "audio_invalid": "Invalid audio.",
+        "audio_empty": "Empty audio.",
+        "audio_too_long": "Audio too long (30 MB maximum).",
+        "audio_invalid_detail": "Invalid audio: {error}",
+        "whisper_missing": "faster-whisper is not installed in ComfyUI's Python.",
+        "transcribe_failed": "Transcription failed: {error}",
+    },
+}
+
+
+def _ui_text(key, config=None, **values):
+    config = config if config is not None else load_config()
+    language = "en" if str(config.get("language", "fr")).lower().startswith("en") else "fr"
+    text = _UI_TEXT[language].get(key) or _UI_TEXT["fr"].get(key, key)
+    return text.format(**values) if values else text
+
+
 def _api_root(base_url):
     root = base_url.rstrip("/")
     return root[:-3] if root.endswith("/v1") else root
 
 
-async def _fetch_models(session, base_url):
+async def _fetch_models(session, base_url, config=None):
     try:
         async with session.get(_api_root(base_url) + "/api/v0/models") as response:
             if response.status == 200:
@@ -117,7 +161,7 @@ async def _fetch_models(session, base_url):
         pass
     async with session.get(base_url.rstrip("/") + "/models") as response:
         if response.status != 200:
-            raise web.HTTPBadGateway(text="LM Studio a refusé la liste des modèles.")
+            raise web.HTTPBadGateway(text=_ui_text("models_refused", config))
         data = await response.json()
         return [
             {"id": entry.get("id"), "type": "llm", "state": None}
@@ -126,17 +170,17 @@ async def _fetch_models(session, base_url):
         ]
 
 
-async def _resolve_model(session, base_url, requested):
+async def _resolve_model(session, base_url, requested, config=None):
     if requested:
         return requested
-    models = await _fetch_models(session, base_url)
+    models = await _fetch_models(session, base_url, config)
     for model in models:
         if model["state"] == "loaded" and model["type"] in ("llm", "vlm"):
             return model["id"]
     for model in models:
         if model["type"] in ("llm", "vlm"):
             return model["id"]
-    raise web.HTTPBadGateway(text="Aucun modèle de chat n'est disponible dans LM Studio.")
+    raise web.HTTPBadGateway(text=_ui_text("no_model", config))
 
 
 def _error_message(text):
@@ -365,11 +409,11 @@ async def _run_tool(name, arguments, seen):
     return f"Outil inconnu : {name}"
 
 
-def _tool_label(name, arguments):
+def _tool_label(name, arguments, config=None):
     if name == "web_search":
-        return f"🔎 Recherche web : {str(arguments.get('query') or '')[:80]}"
+        return _ui_text("tool_search", config, query=str(arguments.get("query") or "")[:80])
     if name == "open_url":
-        return f"🌐 Ouverture : {str(arguments.get('url') or '')[:100]}"
+        return _ui_text("tool_open", config, url=str(arguments.get("url") or "")[:100])
     return None
 
 
@@ -456,7 +500,7 @@ async def _run_agent(session, base_url, model, messages, config, web_enabled, re
                 arguments = {}
             if not isinstance(arguments, dict):
                 arguments = {}
-            label = _tool_label(name, arguments)
+            label = _tool_label(name, arguments, config)
             if label:
                 await _write_event(response, {"bionic_event": "tool", "label": label})
             result = await _run_tool(name, arguments, seen)
@@ -476,9 +520,9 @@ async def bionic_get_config(request):
     error = None
     try:
         async with ClientSession(timeout=ClientTimeout(total=8)) as session:
-            models = await _fetch_models(session, config["base_url"])
+            models = await _fetch_models(session, config["base_url"], config)
     except Exception as exc:  # noqa: BLE001 - surfaced to the panel as a status line
-        error = f"LM Studio injoignable ({exc})"
+        error = _ui_text("status_error", config, error=str(exc))
     models.sort(key=lambda model: (model["state"] != "loaded", model["id"]))
     return web.json_response({"config": config, "models": models, "error": error})
 
@@ -491,16 +535,15 @@ async def bionic_save_config(request):
 @routes.post("/bionic_chat/chat")
 async def bionic_chat(request):
     payload = await request.json()
+    config = load_config()
     messages = payload.get("messages")
     if not isinstance(messages, list) or not messages:
-        raise web.HTTPBadRequest(text="Messages manquants.")
-
-    config = load_config()
+        raise web.HTTPBadRequest(text=_ui_text("messages_missing", config))
     base_url = config["base_url"]
     web_enabled = bool(config["web_enabled"])
     session = ClientSession(timeout=ClientTimeout(total=None, sock_connect=15, sock_read=600))
     try:
-        model = await _resolve_model(session, base_url, payload.get("model") or config["model"])
+        model = await _resolve_model(session, base_url, payload.get("model") or config["model"], config)
         system_prompt = config["system_prompt"].strip()
         if web_enabled:
             system_prompt = (system_prompt + "\n\n" + WEB_SYSTEM_HINT).strip()
@@ -538,7 +581,7 @@ async def bionic_chat(request):
     except web.HTTPBadGateway as exc:
         return web.json_response({"error": exc.text}, status=502)
     except ClientConnectorError:
-        return web.json_response({"error": f"LM Studio injoignable sur {base_url}."}, status=502)
+        return web.json_response({"error": _ui_text("connect_error", config, base_url=base_url)}, status=502)
     finally:
         await session.close()
 
@@ -586,22 +629,22 @@ def _transcribe_blocking(audio, size, language):
 @routes.post("/bionic_chat/transcribe")
 async def bionic_transcribe(request):
     payload = await request.json()
+    config = load_config()
     encoded = payload.get("audio") or ""
     try:
         raw = base64.b64decode(encoded.split(",", 1)[-1], validate=False)
     except ValueError:
-        raise web.HTTPBadRequest(text="Audio invalide.")
+        raise web.HTTPBadRequest(text=_ui_text("audio_invalid", config))
     if not raw:
-        raise web.HTTPBadRequest(text="Audio vide.")
+        raise web.HTTPBadRequest(text=_ui_text("audio_empty", config))
     if len(raw) > 30 * 1024 * 1024:
-        raise web.HTTPBadRequest(text="Audio trop long (30 Mo maximum).")
+        raise web.HTTPBadRequest(text=_ui_text("audio_too_long", config))
 
     try:
         audio = _decode_wav(raw)
     except (wave.Error, ValueError) as exc:
-        raise web.HTTPBadRequest(text=f"Audio invalide : {exc}")
+        raise web.HTTPBadRequest(text=_ui_text("audio_invalid_detail", config, error=str(exc)))
 
-    config = load_config()
     size = str(payload.get("model") or config["transcribe_model"])
     language = str(payload.get("language") or config["transcribe_language"])
 
@@ -610,8 +653,8 @@ async def bionic_transcribe(request):
         text = await loop.run_in_executor(None, _transcribe_blocking, audio, size, language)
     except ImportError:
         return web.json_response(
-            {"error": "faster-whisper n'est pas installé dans le Python de ComfyUI."}, status=501
+            {"error": _ui_text("whisper_missing", config)}, status=501
         )
     except Exception as exc:  # noqa: BLE001 - download/model errors must reach the panel
-        return web.json_response({"error": f"Transcription impossible : {exc}"}, status=500)
+        return web.json_response({"error": _ui_text("transcribe_failed", config, error=str(exc))}, status=500)
     return web.json_response({"text": text})

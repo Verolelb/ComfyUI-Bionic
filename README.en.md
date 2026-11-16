@@ -7,6 +7,7 @@ A Bionic-style chat (LM Studio) right inside ComfyUI, with audio input, vision i
 ## Features
 
 - Floating chat panel connected to the LM Studio local server (text and vision models).
+- French or English interface, switchable in ⚙ (panel and node).
 - Streaming answers, collapsible reasoning, model picker in the panel.
 - Vision input: 🖼 button, `Ctrl+V` paste or drag and drop images.
 - Audio input: 🎙 button, microphone recording and local transcription (faster-whisper).
@@ -56,6 +57,7 @@ If no **Bionic Chat Prompt** node exists in the graph, it is created automatical
 
 The ⚙ button in the panel lets you change:
 
+- the interface language (French or English);
 - the LM Studio server URL;
 - the system prompt;
 - the temperature;

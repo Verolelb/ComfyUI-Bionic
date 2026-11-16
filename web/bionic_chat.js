@@ -5,6 +5,189 @@ const NODE_TYPE = "BionicChatPrompt";
 const MAX_IMAGES = 6;
 const MAX_IMAGE_SIDE = 1280;
 
+const I18N = {
+  fr: {
+    launcherTitle: "Ouvrir le chat Bionic",
+    settings: "Réglages",
+    newChat: "Nouvelle conversation",
+    close: "Fermer",
+    modelTitle: "Modèle LM Studio",
+    placeholderIdle: "Écris ton prompt… (Entrée = envoyer, Maj+Entrée = nouvelle ligne)",
+    placeholderBusy: "Bionic répond…",
+    micTitle: "Entrée audio (Voxtral/Whisper local)",
+    attachTitle: "Joindre une image",
+    webOnTitle: "Recherche Internet activée — cliquer pour désactiver",
+    webOffTitle: "Recherche Internet désactivée — cliquer pour activer",
+    runTitle: "Envoyer le texte dans la node Bionic Chat Prompt et lancer le workflow",
+    send: "Envoyer",
+    stop: "Stop",
+    serverUrl: "Serveur LM Studio (OpenAI compatible)",
+    systemPrompt: "Prompt système",
+    temperature: "Température",
+    autoRun: "Lancer automatiquement le workflow après la réponse",
+    autoAudio: "Envoyer automatiquement la transcription après le micro",
+    web: "Accès Internet (recherche web + ouverture d'URL)",
+    whisperModel: "Modèle de transcription audio",
+    transcribeLanguage: "Langue de la transcription",
+    interfaceLanguage: "Langue de l'interface",
+    save: "Enregistrer",
+    whisperTiny: "tiny (rapide, ~75 Mo)",
+    whisperBase: "base (~145 Mo)",
+    whisperSmall: "small (recommandé, ~480 Mo)",
+    whisperMedium: "medium (~1,5 Go)",
+    whisperLarge: "large-v3 (~3 Go)",
+    sttFr: "Français",
+    sttEn: "Anglais",
+    sttAuto: "Détection automatique",
+    sttEs: "Espagnol",
+    sttDe: "Allemand",
+    sttIt: "Italien",
+    modelsCount: "{0} modèle(s) LM Studio",
+    lmStudioHint: "{0} — démarre le serveur LM Studio (Developer → Start server).",
+    lmStudioUnreachable: "LM Studio injoignable : {0}",
+    webEnabledStatus: "Recherche Internet activée",
+    webDisabledStatus: "Recherche Internet désactivée",
+    newChatStatus: "Nouvelle conversation",
+    languageStatus: "Langue de l'interface : français",
+    recordingStatus: "Enregistrement… clique sur 🎙 pour arrêter",
+    transcribingStatus: "Transcription en cours…",
+    nothingTranscribed: "Rien n'a été transcrit.",
+    transcriptionAdded: "Transcription ajoutée",
+    transcriptionFailed: "Transcription impossible",
+    target: "Cible : {0} (#{1})",
+    noTarget: "Aucune node Bionic Chat Prompt dans le graphe — elle sera créée au premier Run.",
+    reasoning: "Raisonnement",
+    copy: "Copier",
+    copied: "Copié",
+    emptyHint:
+      "Décris ta scène, joins une image ou utilise le micro. Le bouton ⚡ Run envoie le prompt dans la node Bionic Chat Prompt et lance le workflow.",
+    attachmentAlt: "pièce jointe",
+    remove: "Retirer",
+    visionSuffix: " (vision)",
+    noModel: "Aucun modèle LM Studio",
+    settingsNotSaved: "Réglages non enregistrés : {0}",
+    settingsNotLoaded: "Réglages pas encore chargés.",
+    settingsSaved: "Réglages enregistrés",
+    noText: "Aucun texte à envoyer dans la node.",
+    cannotCreate: "Impossible de créer la node Bionic Chat Prompt.",
+    noPromptInput: "La node Bionic Chat Prompt n'a pas d'entrée prompt.",
+    launched: "Prompt envoyé dans #{0} — workflow lancé",
+    launchFailed: "Lancement impossible : {0}",
+    maxImages: "{0} images maximum par message.",
+    imageUnreadable: "Image illisible : {0}",
+    micUnavailable: "Micro indisponible : {0}",
+    transcribeFailed: "Transcription impossible : {0}",
+    transcribeFailedToast: "Transcription impossible : {0}",
+    lmStudioDown: "LM Studio est injoignable. Démarre son serveur local (port 1234).",
+    errorPrefix: "Erreur : {0}",
+    nodeTitle: "Prompt du chat Bionic",
+    nodeDescription:
+      "Prompt envoyé depuis le panneau de chat Bionic. Le bouton RUN du chat remplit ce champ et lance le workflow.",
+    readFailed: "lecture impossible",
+    unsupportedFormat: "format non supporté",
+    dropImage: "Dépose une image",
+  },
+  en: {
+    launcherTitle: "Open the Bionic chat",
+    settings: "Settings",
+    newChat: "New conversation",
+    close: "Close",
+    modelTitle: "LM Studio model",
+    placeholderIdle: "Write your prompt… (Enter = send, Shift+Enter = new line)",
+    placeholderBusy: "Bionic is answering…",
+    micTitle: "Audio input (local Whisper)",
+    attachTitle: "Attach an image",
+    webOnTitle: "Web search enabled — click to disable",
+    webOffTitle: "Web search disabled — click to enable",
+    runTitle: "Send the text into the Bionic Chat Prompt node and run the workflow",
+    send: "Send",
+    stop: "Stop",
+    serverUrl: "LM Studio server (OpenAI compatible)",
+    systemPrompt: "System prompt",
+    temperature: "Temperature",
+    autoRun: "Run the workflow automatically after the answer",
+    autoAudio: "Send the transcription automatically after the microphone",
+    web: "Internet access (web search + URL opening)",
+    whisperModel: "Audio transcription model",
+    transcribeLanguage: "Transcription language",
+    interfaceLanguage: "Interface language",
+    save: "Save",
+    whisperTiny: "tiny (fast, ~75 MB)",
+    whisperBase: "base (~145 MB)",
+    whisperSmall: "small (recommended, ~480 MB)",
+    whisperMedium: "medium (~1.5 GB)",
+    whisperLarge: "large-v3 (~3 GB)",
+    sttFr: "French",
+    sttEn: "English",
+    sttAuto: "Auto-detect",
+    sttEs: "Spanish",
+    sttDe: "German",
+    sttIt: "Italian",
+    modelsCount: "{0} LM Studio model(s)",
+    lmStudioHint: "{0} — start the LM Studio server (Developer → Start server).",
+    lmStudioUnreachable: "LM Studio unreachable: {0}",
+    webEnabledStatus: "Web search enabled",
+    webDisabledStatus: "Web search disabled",
+    newChatStatus: "New conversation",
+    languageStatus: "Interface language: English",
+    recordingStatus: "Recording… click 🎙 to stop",
+    transcribingStatus: "Transcribing…",
+    nothingTranscribed: "Nothing was transcribed.",
+    transcriptionAdded: "Transcription added",
+    transcriptionFailed: "Transcription failed",
+    target: "Target: {0} (#{1})",
+    noTarget: "No Bionic Chat Prompt node in the graph — it will be created on the first Run.",
+    reasoning: "Reasoning",
+    copy: "Copy",
+    copied: "Copied",
+    emptyHint:
+      "Describe your scene, attach an image or use the microphone. The ⚡ Run button sends the prompt into the Bionic Chat Prompt node and runs the workflow.",
+    attachmentAlt: "attachment",
+    remove: "Remove",
+    visionSuffix: " (vision)",
+    noModel: "No LM Studio model",
+    settingsNotSaved: "Settings not saved: {0}",
+    settingsNotLoaded: "Settings are not loaded yet.",
+    settingsSaved: "Settings saved",
+    noText: "No text to send into the node.",
+    cannotCreate: "Could not create the Bionic Chat Prompt node.",
+    noPromptInput: "The Bionic Chat Prompt node has no prompt input.",
+    launched: "Prompt sent to #{0} — workflow started",
+    launchFailed: "Could not start the workflow: {0}",
+    maxImages: "{0} images maximum per message.",
+    imageUnreadable: "Unreadable image: {0}",
+    micUnavailable: "Microphone unavailable: {0}",
+    transcribeFailed: "Transcription failed: {0}",
+    transcribeFailedToast: "Transcription failed: {0}",
+    lmStudioDown: "LM Studio is unreachable. Start its local server (port 1234).",
+    errorPrefix: "Error: {0}",
+    nodeTitle: "Bionic Chat Prompt",
+    nodeDescription:
+      "Prompt sent from the Bionic chat panel. The chat's RUN button fills this field and queues the workflow.",
+    readFailed: "read failed",
+    unsupportedFormat: "unsupported format",
+    dropImage: "Drop an image",
+  },
+};
+
+const WHISPER_SIZES = ["tiny", "base", "small", "medium", "large-v3"];
+const WHISPER_KEYS = {
+  tiny: "whisperTiny",
+  base: "whisperBase",
+  small: "whisperSmall",
+  medium: "whisperMedium",
+  "large-v3": "whisperLarge",
+};
+const STT_LANGUAGES = [
+  ["fr", "sttFr"],
+  ["en", "sttEn"],
+  ["auto", "sttAuto"],
+  ["es", "sttEs"],
+  ["de", "sttDe"],
+  ["it", "sttIt"],
+];
+const NODE_TITLES = ["Prompt du chat Bionic", "Bionic Chat Prompt"];
+
 const state = {
   config: null,
   models: [],
@@ -23,6 +206,19 @@ const state = {
   ui: null,
   els: null,
 };
+
+function language() {
+  return state.config?.language === "en" ? "en" : "fr";
+}
+
+function t(key, ...values) {
+  const dict = I18N[language()] || I18N.fr;
+  let text = dict[key] !== undefined ? dict[key] : I18N.fr[key] !== undefined ? I18N.fr[key] : key;
+  values.forEach((value, index) => {
+    text = text.split(`{${index}}`).join(String(value));
+  });
+  return text;
+}
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -65,7 +261,6 @@ function buildPanel() {
   const launcher = el("button", null, "💬 Bionic");
   launcher.id = "bionic-launcher";
   launcher.type = "button";
-  launcher.title = "Ouvrir le chat Bionic";
 
   const panel = el("section");
   panel.id = "bionic-panel";
@@ -74,75 +269,74 @@ function buildPanel() {
     <header class="bionic-header">
       <span class="bionic-title">Bionic<span>.</span></span>
       <div class="bionic-header-btns">
-        <button type="button" class="bionic-icon-btn" id="bionic-settings-btn" title="Réglages">⚙</button>
-        <button type="button" class="bionic-icon-btn" id="bionic-new" title="Nouvelle conversation">＋</button>
-        <button type="button" class="bionic-icon-btn" id="bionic-close" title="Fermer">✕</button>
+        <button type="button" class="bionic-icon-btn" id="bionic-settings-btn" data-i18n-title="settings">⚙</button>
+        <button type="button" class="bionic-icon-btn" id="bionic-new" data-i18n-title="newChat">＋</button>
+        <button type="button" class="bionic-icon-btn" id="bionic-close" data-i18n-title="close">✕</button>
       </div>
     </header>
     <div class="bionic-model-row">
-      <select id="bionic-model" title="Modèle LM Studio"></select>
+      <select id="bionic-model" data-i18n-title="modelTitle"></select>
     </div>
     <div id="bionic-messages"></div>
     <div id="bionic-attachments"></div>
     <div class="bionic-status" id="bionic-status"></div>
     <div class="bionic-composer">
-      <textarea id="bionic-input" rows="2" placeholder="Écris ton prompt… (Entrée = envoyer, Maj+Entrée = nouvelle ligne)"></textarea>
+      <textarea id="bionic-input" rows="2" data-i18n-placeholder="placeholderIdle"></textarea>
       <div class="bionic-tools">
-        <button type="button" class="bionic-icon-btn" id="bionic-mic" title="Entrée audio (Voxtral/Whisper local)">🎙</button>
-        <button type="button" class="bionic-icon-btn" id="bionic-attach" title="Joindre une image">🖼</button>
-        <button type="button" class="bionic-icon-btn" id="bionic-web" title="Recherche Internet" aria-pressed="false">🌐</button>
+        <button type="button" class="bionic-icon-btn" id="bionic-mic" data-i18n-title="micTitle">🎙</button>
+        <button type="button" class="bionic-icon-btn" id="bionic-attach" data-i18n-title="attachTitle">🖼</button>
+        <button type="button" class="bionic-icon-btn" id="bionic-web" data-i18n-title="webOffTitle" aria-pressed="false">🌐</button>
         <input type="file" id="bionic-file" accept="image/*" multiple hidden>
         <span class="bionic-rec-time" id="bionic-rec-time"></span>
         <span class="bionic-spacer"></span>
-        <button type="button" class="bionic-btn bionic-run" id="bionic-run" title="Envoyer le texte dans la node Bionic Chat Prompt et lancer le workflow">⚡ Run</button>
-        <button type="button" class="bionic-btn bionic-send" id="bionic-send">Envoyer</button>
+        <button type="button" class="bionic-btn bionic-run" id="bionic-run" data-i18n-title="runTitle">⚡ Run</button>
+        <button type="button" class="bionic-btn bionic-send" id="bionic-send" data-i18n="send">Envoyer</button>
       </div>
     </div>
     <div id="bionic-settings" class="bionic-hidden">
-      <div class="bionic-settings-title">Réglages</div>
-      <label>Serveur LM Studio (OpenAI compatible)
+      <div class="bionic-settings-title" data-i18n="settings">Réglages</div>
+      <label>
+        <span data-i18n="interfaceLanguage">Langue de l'interface</span>
+        <select id="bionic-cfg-ui-lang">
+          <option value="fr">Français</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <label>
+        <span data-i18n="serverUrl">Serveur LM Studio (OpenAI compatible)</span>
         <input id="bionic-cfg-url" type="text" spellcheck="false">
       </label>
-      <label>Prompt système
+      <label>
+        <span data-i18n="systemPrompt">Prompt système</span>
         <textarea id="bionic-cfg-system" spellcheck="false"></textarea>
       </label>
-      <label>Température
+      <label>
+        <span data-i18n="temperature">Température</span>
         <input id="bionic-cfg-temp" type="number" min="0" max="2" step="0.05">
       </label>
       <label class="bionic-check">
         <input id="bionic-cfg-autorun" type="checkbox">
-        Lancer automatiquement le workflow après la réponse
+        <span data-i18n="autoRun">Lancer automatiquement le workflow après la réponse</span>
       </label>
       <label class="bionic-check">
         <input id="bionic-cfg-autoaudio" type="checkbox">
-        Envoyer automatiquement la transcription après le micro
+        <span data-i18n="autoAudio">Envoyer automatiquement la transcription après le micro</span>
       </label>
       <label class="bionic-check">
         <input id="bionic-cfg-web" type="checkbox">
-        Accès Internet (recherche web + ouverture d'URL)
+        <span data-i18n="web">Accès Internet (recherche web + ouverture d'URL)</span>
       </label>
-      <label>Modèle de transcription audio
-        <select id="bionic-cfg-whisper">
-          <option value="tiny">tiny (rapide, ~75 Mo)</option>
-          <option value="base">base (~145 Mo)</option>
-          <option value="small">small (recommandé, ~480 Mo)</option>
-          <option value="medium">medium (~1,5 Go)</option>
-          <option value="large-v3">large-v3 (~3 Go)</option>
-        </select>
+      <label>
+        <span data-i18n="whisperModel">Modèle de transcription audio</span>
+        <select id="bionic-cfg-whisper"></select>
       </label>
-      <label>Langue de la transcription
-        <select id="bionic-cfg-language">
-          <option value="fr">Français</option>
-          <option value="en">Anglais</option>
-          <option value="auto">Détection automatique</option>
-          <option value="es">Espagnol</option>
-          <option value="de">Allemand</option>
-          <option value="it">Italien</option>
-        </select>
+      <label>
+        <span data-i18n="transcribeLanguage">Langue de la transcription</span>
+        <select id="bionic-cfg-language"></select>
       </label>
       <div class="bionic-settings-actions">
-        <button type="button" class="bionic-btn bionic-send" id="bionic-cfg-save">Enregistrer</button>
-        <button type="button" class="bionic-btn" id="bionic-cfg-close">Fermer</button>
+        <button type="button" class="bionic-btn bionic-send" id="bionic-cfg-save" data-i18n="save">Enregistrer</button>
+        <button type="button" class="bionic-btn" id="bionic-cfg-close" data-i18n="close">Fermer</button>
       </div>
     </div>
   `;
@@ -151,6 +345,7 @@ function buildPanel() {
   document.body.appendChild(root);
   state.els = collectElements();
   bindEvents();
+  applyLanguage();
 }
 
 function collectElements() {
@@ -169,7 +364,95 @@ function collectElements() {
     recTime: byId("bionic-rec-time"),
     file: byId("bionic-file"),
     send: byId("bionic-send"),
+    uiLanguage: byId("bionic-cfg-ui-lang"),
   };
+}
+
+function applyLanguage() {
+  const dict = I18N[language()] || I18N.fr;
+  const root = document.getElementById("bionic-chat-root");
+  if (!root) return;
+
+  root.querySelectorAll("[data-i18n]").forEach((node) => {
+    const value = dict[node.dataset.i18n];
+    if (value !== undefined) node.textContent = value;
+  });
+  root.querySelectorAll("[data-i18n-title]").forEach((node) => {
+    const value = dict[node.dataset.i18nTitle];
+    if (value !== undefined) node.title = value;
+  });
+
+  const panel = document.getElementById("bionic-panel");
+  if (panel) panel.dataset.dropLabel = dict.dropImage;
+
+  renderWhisperOptions();
+  renderTranscribeLanguageOptions();
+  populateModelPlaceholder();
+
+  if (state.els) {
+    state.els.launcher.title = dict.launcherTitle;
+    state.els.input.placeholder = state.busy ? dict.placeholderBusy : dict.placeholderIdle;
+    state.els.send.textContent = state.busy ? dict.stop : dict.send;
+  }
+
+  updateWebButton();
+  if (state.messages.length && !state.busy) renderMessages();
+  applyNodeLanguage();
+}
+
+function renderWhisperOptions() {
+  const select = document.getElementById("bionic-cfg-whisper");
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = "";
+  for (const size of WHISPER_SIZES) {
+    const option = el("option", null, t(WHISPER_KEYS[size]));
+    option.value = size;
+    select.appendChild(option);
+  }
+  if (previous) select.value = previous;
+}
+
+function renderTranscribeLanguageOptions() {
+  const select = document.getElementById("bionic-cfg-language");
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = "";
+  for (const [code, key] of STT_LANGUAGES) {
+    const option = el("option", null, t(key));
+    option.value = code;
+    select.appendChild(option);
+  }
+  if (previous) select.value = previous;
+}
+
+function populateModelPlaceholder() {
+  const select = state.els?.model;
+  if (!select || state.models.length) return;
+  select.innerHTML = "";
+  const option = el("option", null, t("noModel"));
+  select.appendChild(option);
+  select.disabled = true;
+}
+
+function applyNodeLanguage() {
+  const title = t("nodeTitle");
+  const description = t("nodeDescription");
+  const registered = window.LiteGraph?.registered_node_types?.[NODE_TYPE];
+  if (registered) {
+    registered.title = title;
+    registered.desc = description;
+  }
+  const nodes = app.graph?._nodes || app.graph?.nodes || [];
+  let changed = false;
+  for (const node of nodes) {
+    if (node.type !== NODE_TYPE) continue;
+    if (NODE_TITLES.includes(node.title)) {
+      node.title = title;
+      changed = true;
+    }
+  }
+  if (changed) app.graph?.setDirtyCanvas?.(true, true);
 }
 
 function bindEvents() {
@@ -181,6 +464,7 @@ function bindEvents() {
     els.settings.classList.add("bionic-hidden");
   });
   document.getElementById("bionic-cfg-save").addEventListener("click", saveSettings);
+  els.uiLanguage.addEventListener("change", changeLanguage);
   document.getElementById("bionic-new").addEventListener("click", newConversation);
   document.getElementById("bionic-attach").addEventListener("click", () => els.file.click());
   els.file.addEventListener("change", () => {
@@ -249,6 +533,21 @@ function autoGrowInput() {
   input.style.height = `${Math.min(input.scrollHeight, 180)}px`;
 }
 
+async function changeLanguage() {
+  const value = state.els.uiLanguage.value === "en" ? "en" : "fr";
+  if (!state.config) {
+    state.config = { ...(state.config || {}), language: value };
+    applyLanguage();
+    return;
+  }
+  state.config.language = value;
+  applyLanguage();
+  if (await saveConfig({ language: value })) {
+    fillSettings();
+    setStatus(t("languageStatus"));
+  }
+}
+
 async function loadConfig() {
   try {
     const response = await api.fetchApi("/bionic_chat/config");
@@ -260,16 +559,17 @@ async function loadConfig() {
     if (!state.config.model && state.models.length) {
       state.config.model = state.models[0].id;
     }
+    applyLanguage();
     renderModels();
     fillSettings();
     updateWebButton();
     setStatus(
       data.error
-        ? `${data.error} — démarre le serveur LM Studio (Developer → Start server).`
-        : `${state.models.length} modèle(s) LM Studio`
+        ? t("lmStudioHint", data.error)
+        : t("modelsCount", state.models.length)
     );
   } catch (error) {
-    setStatus(`LM Studio injoignable : ${error.message || error}`);
+    setStatus(t("lmStudioUnreachable", error.message || error));
   }
 }
 
@@ -285,7 +585,7 @@ async function saveConfig(patch) {
     state.config = data.config;
     return true;
   } catch (error) {
-    toast("error", `Réglages non enregistrés : ${error.message || error}`);
+    toast("error", t("settingsNotSaved", error.message || error));
     return false;
   }
 }
@@ -298,16 +598,18 @@ function fillSettings() {
   document.getElementById("bionic-cfg-autorun").checked = state.config.auto_run !== false;
   document.getElementById("bionic-cfg-autoaudio").checked = state.config.auto_send_audio !== false;
   document.getElementById("bionic-cfg-web").checked = state.config.web_enabled !== false;
+  document.getElementById("bionic-cfg-ui-lang").value = state.config.language === "en" ? "en" : "fr";
   document.getElementById("bionic-cfg-whisper").value = state.config.transcribe_model;
   document.getElementById("bionic-cfg-language").value = state.config.transcribe_language;
 }
 
 async function saveSettings() {
   if (!state.config) {
-    toast("warning", "Réglages pas encore chargés.");
+    toast("warning", t("settingsNotLoaded"));
     return;
   }
   const patch = {
+    language: document.getElementById("bionic-cfg-ui-lang").value,
     base_url: document.getElementById("bionic-cfg-url").value.trim(),
     system_prompt: document.getElementById("bionic-cfg-system").value,
     temperature: Number(document.getElementById("bionic-cfg-temp").value),
@@ -320,24 +622,22 @@ async function saveSettings() {
   if (await saveConfig(patch)) {
     state.els.settings.classList.add("bionic-hidden");
     await loadConfig();
-    toast("success", "Réglages enregistrés");
+    toast("success", t("settingsSaved"));
   }
 }
 
 function updateWebButton() {
   const button = document.getElementById("bionic-web");
   if (!button) return;
-  const enabled = state.config?.web_enabled !== false;
+  const enabled = state.config ? state.config.web_enabled !== false : false;
   button.classList.toggle("bionic-web-on", enabled);
   button.setAttribute("aria-pressed", String(enabled));
-  button.title = enabled
-    ? "Recherche Internet activée — cliquer pour désactiver"
-    : "Recherche Internet désactivée — cliquer pour activer";
+  button.title = enabled ? t("webOnTitle") : t("webOffTitle");
 }
 
 async function toggleWeb() {
   if (!state.config) {
-    toast("warning", "Réglages pas encore chargés.");
+    toast("warning", t("settingsNotLoaded"));
     return;
   }
   const enabled = state.config.web_enabled === false;
@@ -345,7 +645,7 @@ async function toggleWeb() {
   updateWebButton();
   if (await saveConfig({ web_enabled: enabled })) {
     fillSettings();
-    setStatus(enabled ? "Recherche Internet activée" : "Recherche Internet désactivée");
+    setStatus(enabled ? t("webEnabledStatus") : t("webDisabledStatus"));
   } else {
     state.config.web_enabled = !enabled;
     updateWebButton();
@@ -356,14 +656,14 @@ function renderModels() {
   const select = state.els.model;
   select.innerHTML = "";
   if (!state.models.length) {
-    select.appendChild(el("option", null, "Aucun modèle LM Studio"));
+    select.appendChild(el("option", null, t("noModel")));
     select.disabled = true;
     return;
   }
   select.disabled = false;
   for (const model of state.models) {
     if (!["llm", "vlm"].includes(model.type)) continue;
-    const option = el("option", null, `${model.id}${model.type === "vlm" ? " (vision)" : ""}`);
+    const option = el("option", null, `${model.id}${model.type === "vlm" ? t("visionSuffix") : ""}`);
     option.value = model.id;
     select.appendChild(option);
   }
@@ -378,7 +678,7 @@ function newConversation() {
   renderMessages();
   state.els.input.value = "";
   autoGrowInput();
-  setStatus("Nouvelle conversation");
+  setStatus(t("newChatStatus"));
 }
 
 function scrollToBottom() {
@@ -391,7 +691,7 @@ function imageStrip(images) {
   for (const image of images) {
     const img = el("img");
     img.src = image;
-    img.alt = "pièce jointe";
+    img.alt = t("attachmentAlt");
     strip.appendChild(img);
   }
   return strip;
@@ -405,7 +705,7 @@ function messageElement(message) {
   let reasoning = null;
   if (message.reasoning) {
     reasoning = el("details", "bionic-reasoning");
-    reasoning.appendChild(el("summary", null, "Raisonnement"));
+    reasoning.appendChild(el("summary", null, t("reasoning")));
     reasoning.appendChild(el("div", null, message.reasoning));
     bubble.appendChild(reasoning);
   }
@@ -424,12 +724,12 @@ function messageElement(message) {
     const runButton = el("button", "bionic-link", "⚡ Run");
     runButton.type = "button";
     runButton.addEventListener("click", () => runPrompt(message.content));
-    const copyButton = el("button", "bionic-link", "Copier");
+    const copyButton = el("button", "bionic-link", t("copy"));
     copyButton.type = "button";
     copyButton.addEventListener("click", async () => {
       await navigator.clipboard.writeText(message.content);
-      copyButton.textContent = "Copié";
-      setTimeout(() => (copyButton.textContent = "Copier"), 1200);
+      copyButton.textContent = t("copied");
+      setTimeout(() => (copyButton.textContent = t("copy")), 1200);
     });
     actions.append(runButton, copyButton);
     if (state.busy) runButton.disabled = true;
@@ -444,11 +744,7 @@ function renderMessages() {
   box.innerHTML = "";
   state.ui = null;
   if (!state.messages.length) {
-    const hint = el(
-      "div",
-      "bionic-empty",
-      "Décris ta scène, joins une image ou utilise le micro. Le bouton ⚡ Run envoie le prompt dans la node Bionic Chat Prompt et lance le workflow."
-    );
+    const hint = el("div", "bionic-empty", t("emptyHint"));
     box.appendChild(hint);
     return;
   }
@@ -467,10 +763,10 @@ function renderAttachments() {
     const thumb = el("div", "bionic-thumb");
     const img = el("img");
     img.src = image;
-    img.alt = "pièce jointe";
+    img.alt = t("attachmentAlt");
     const remove = el("button", null, "×");
     remove.type = "button";
-    remove.title = "Retirer";
+    remove.title = t("remove");
     remove.addEventListener("click", () => {
       state.attachments.splice(index, 1);
       renderAttachments();
@@ -529,13 +825,11 @@ async function sendMessage() {
 
 function setBusyUi(busy) {
   const els = state.els;
-  els.send.textContent = busy ? "Stop" : "Envoyer";
+  els.send.textContent = busy ? t("stop") : t("send");
   els.send.classList.toggle("bionic-run", busy);
   els.send.classList.toggle("bionic-send", !busy);
   els.mic.disabled = busy;
-  els.input.placeholder = busy
-    ? "Bionic répond…"
-    : "Écris ton prompt… (Entrée = envoyer, Maj+Entrée = nouvelle ligne)";
+  els.input.placeholder = busy ? t("placeholderBusy") : t("placeholderIdle");
 }
 
 function stopStreaming() {
@@ -546,7 +840,7 @@ async function streamChat(assistant) {
   if (!state.config) await loadConfig();
   if (!state.config) {
     assistant.error = true;
-    assistant.content = "LM Studio est injoignable. Démarre son serveur local (port 1234).";
+    assistant.content = t("lmStudioDown");
     return;
   }
 
@@ -602,7 +896,7 @@ async function streamChat(assistant) {
       assistant.aborted = true;
     } else {
       assistant.error = true;
-      assistant.content = assistant.content || `Erreur : ${error.message || error}`;
+      assistant.content = assistant.content || t("errorPrefix", error.message || error);
     }
   } finally {
     state.abort = null;
@@ -628,7 +922,7 @@ function handleSseChunk(chunk, assistant) {
     }
     if (parsed.error) {
       assistant.error = true;
-      assistant.content = assistant.content || `Erreur : ${parsed.error}`;
+      assistant.content = assistant.content || t("errorPrefix", parsed.error);
       return false;
     }
     const delta = parsed.choices?.[0]?.delta || {};
@@ -654,7 +948,7 @@ function renderStreaming(assistant) {
   state.ui.text.classList.toggle("bionic-typing", !assistant.content && !assistant.reasoning);
   if (assistant.reasoning && !state.ui.reasoning) {
     const details = el("details", "bionic-reasoning");
-    details.appendChild(el("summary", null, "Raisonnement"));
+    details.appendChild(el("summary", null, t("reasoning")));
     details.appendChild(el("div", null, assistant.reasoning));
     state.ui.wrap.querySelector(".bionic-bubble").prepend(details);
     state.ui.reasoning = details;
@@ -697,27 +991,27 @@ function updateTargetLabel() {
   const node = getReceiverNode();
   state.targetNodeId = node?.id ?? null;
   if (node) {
-    setStatus(`Cible : ${node.title || "Bionic Chat Prompt"} (#${node.id})`);
+    setStatus(t("target", node.title || t("nodeTitle"), node.id));
   } else {
-    setStatus("Aucune node Bionic Chat Prompt dans le graphe — elle sera créée au premier Run.");
+    setStatus(t("noTarget"));
   }
 }
 
 async function runPrompt(rawText) {
   const text = (rawText || "").trim();
   if (!text) {
-    toast("warning", "Aucun texte à envoyer dans la node.");
+    toast("warning", t("noText"));
     return;
   }
   let node = getReceiverNode();
   if (!node) node = createReceiverNode();
   if (!node) {
-    toast("error", "Impossible de créer la node Bionic Chat Prompt.");
+    toast("error", t("cannotCreate"));
     return;
   }
   const widget = node.widgets?.find((entry) => entry.name === "prompt");
   if (!widget) {
-    toast("error", "La node Bionic Chat Prompt n'a pas d'entrée prompt.");
+    toast("error", t("noPromptInput"));
     return;
   }
   widget.value = text;
@@ -727,9 +1021,9 @@ async function runPrompt(rawText) {
 
   try {
     await app.queuePrompt(0, 1);
-    toast("success", `Prompt envoyé dans #${node.id} — workflow lancé`);
+    toast("success", t("launched", node.id));
   } catch (error) {
-    toast("error", `Lancement impossible : ${error?.message || error}`);
+    toast("error", t("launchFailed", error?.message || error));
   }
 }
 
@@ -737,13 +1031,13 @@ async function addImageFiles(fileList) {
   const files = [...(fileList || [])].filter((file) => file.type.startsWith("image/"));
   for (const file of files) {
     if (state.attachments.length >= MAX_IMAGES) {
-      toast("warning", `${MAX_IMAGES} images maximum par message.`);
+      toast("warning", t("maxImages", MAX_IMAGES));
       break;
     }
     try {
       state.attachments.push(await fileToDataUrl(file));
     } catch (error) {
-      toast("error", `Image illisible : ${error.message || error}`);
+      toast("error", t("imageUnreadable", error.message || error));
     }
   }
   renderAttachments();
@@ -768,10 +1062,10 @@ function handlePaste(event) {
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("lecture impossible"));
+    reader.onerror = () => reject(new Error(t("readFailed")));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error("format non supporté"));
+      img.onerror = () => reject(new Error(t("unsupportedFormat")));
       img.onload = () => {
         const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(img.width, img.height));
         const canvas = document.createElement("canvas");
@@ -797,7 +1091,7 @@ async function toggleRecording() {
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
     });
   } catch (error) {
-    toast("error", `Micro indisponible : ${error.message || error}`);
+    toast("error", t("micUnavailable", error.message || error));
     return;
   }
 
@@ -827,11 +1121,11 @@ async function toggleRecording() {
     const seconds = Math.floor((Date.now() - state.recStart) / 1000);
     state.els.recTime.textContent = `● ${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   }, 200);
-  setStatus("Enregistrement… clique sur 🎙 pour arrêter");
+  setStatus(t("recordingStatus"));
 }
 
 async function transcribeBlob(blob) {
-  setStatus("Transcription en cours…");
+  setStatus(t("transcribingStatus"));
   try {
     const arrayBuffer = await blob.arrayBuffer();
     const audioContext = new AudioContext();
@@ -865,20 +1159,20 @@ async function transcribeBlob(blob) {
     if (!response.ok) throw new Error(data.error || response.statusText);
     const text = (data.text || "").trim();
     if (!text) {
-      setStatus("Rien n'a été transcrit.");
+      setStatus(t("nothingTranscribed"));
       return;
     }
     const input = state.els.input;
     input.value = input.value ? `${input.value} ${text}` : text;
     autoGrowInput();
     input.focus();
-    setStatus("Transcription ajoutée");
+    setStatus(t("transcriptionAdded"));
     if (state.config?.auto_send_audio !== false && !state.busy) {
       await sendMessage();
     }
   } catch (error) {
-    toast("error", `Transcription impossible : ${error.message || error}`);
-    setStatus("Transcription impossible");
+    toast("error", t("transcribeFailedToast", error.message || error));
+    setStatus(t("transcriptionFailed"));
   }
 }
 
