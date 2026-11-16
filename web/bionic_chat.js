@@ -116,6 +116,10 @@ function buildPanel() {
         <input id="bionic-cfg-autoaudio" type="checkbox">
         Envoyer automatiquement la transcription après le micro
       </label>
+      <label class="bionic-check">
+        <input id="bionic-cfg-web" type="checkbox">
+        Accès Internet (recherche web + ouverture d'URL)
+      </label>
       <label>Modèle de transcription audio
         <select id="bionic-cfg-whisper">
           <option value="tiny">tiny (rapide, ~75 Mo)</option>
@@ -290,6 +294,7 @@ function fillSettings() {
   document.getElementById("bionic-cfg-temp").value = state.config.temperature;
   document.getElementById("bionic-cfg-autorun").checked = state.config.auto_run !== false;
   document.getElementById("bionic-cfg-autoaudio").checked = state.config.auto_send_audio !== false;
+  document.getElementById("bionic-cfg-web").checked = state.config.web_enabled !== false;
   document.getElementById("bionic-cfg-whisper").value = state.config.transcribe_model;
   document.getElementById("bionic-cfg-language").value = state.config.transcribe_language;
 }
@@ -305,6 +310,7 @@ async function saveSettings() {
     temperature: Number(document.getElementById("bionic-cfg-temp").value),
     auto_run: document.getElementById("bionic-cfg-autorun").checked,
     auto_send_audio: document.getElementById("bionic-cfg-autoaudio").checked,
+    web_enabled: document.getElementById("bionic-cfg-web").checked,
     transcribe_model: document.getElementById("bionic-cfg-whisper").value,
     transcribe_language: document.getElementById("bionic-cfg-language").value,
   };
@@ -487,6 +493,7 @@ async function sendMessage() {
   if (state.config?.auto_run !== false && !assistant.error && !assistant.aborted && assistant.content.trim()) {
     await runPrompt(assistant.content);
   }
+  updateTargetLabel();
 }
 
 function setBusyUi(busy) {
@@ -583,6 +590,15 @@ function handleSseChunk(chunk, assistant) {
       parsed = JSON.parse(data);
     } catch {
       continue;
+    }
+    if (parsed.bionic_event === "tool" && parsed.label) {
+      setStatus(parsed.label);
+      return false;
+    }
+    if (parsed.error) {
+      assistant.error = true;
+      assistant.content = assistant.content || `Erreur : ${parsed.error}`;
+      return false;
     }
     const delta = parsed.choices?.[0]?.delta || {};
     if (delta.reasoning_content) assistant.reasoning += delta.reasoning_content;

@@ -1,10 +1,14 @@
 import asyncio
 import base64
+import html
 import io
+import ipaddress
 import json
 import os
+import re
 import threading
 import wave
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import numpy as np
 from aiohttp import ClientConnectorError, ClientSession, ClientTimeout, web
@@ -32,6 +36,7 @@ CONFIG_DEFAULTS = {
     "transcribe_language": "fr",
     "auto_run": True,
     "auto_send_audio": True,
+    "web_enabled": True,
 }
 
 _WHISPER_MODELS = {}
@@ -136,6 +141,334 @@ def _error_message(text):
     return str(error or text)[:600]
 
 
+WEB_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Cherche des pages web récentes et renvoie les titres et URL des résultats.",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "Requête de recherche"}},
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "open_url",
+            "description": "Ouvre une page web et renvoie son texte lisible.",
+            "parameters": {
+                "type": "object",
+                "properties": {"url": {"type": "string", "description": "URL http ou https"}},
+                "required": ["url"],
+            },
+        },
+    },
+]
+
+WEB_SYSTEM_HINT = (
+    "Accès Internet activé : utilise l'outil web_search pour chercher des informations récentes "
+    "et open_url pour lire une page précise. Fais au plus deux recherches, puis réponds directement "
+    "avec les informations trouvées et cite les URL des sources utilisées."
+)
+
+_BING_SEARCH_URL = "https://www.bing.com/search"
+_DDG_SEARCH_URL = "https://html.duckduckgo.com/html/"
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+)
+_SEARCH_HEADERS = {"User-Agent": _BROWSER_UA, "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"}
+_MAX_PAGE_BYTES = 2 * 1024 * 1024
+_MAX_PAGE_CHARS = 8000
+_MAX_SEARCH_RESULTS = 6
+_MAX_TOOL_ROUNDS = 3
+
+
+def _strip_html(text):
+    return html.unescape(re.sub(r"(?s)<[^>]+>", "", text)).strip()
+
+
+def _decode_duckduckgo_link(href):
+    if href.startswith("//"):
+        href = "https:" + href
+    parsed = urlparse(href)
+    if parsed.netloc.endswith("duckduckgo.com") and parsed.path.startswith("/l/"):
+        target = parse_qs(parsed.query).get("uddg", [""])[0]
+        if target:
+            return target
+    return href
+
+
+def _decode_bing_link(href):
+    href = html.unescape(href)
+    if "bing.com/ck/a" in href:
+        target = parse_qs(urlparse(href).query).get("u", [""])[0]
+        if target.startswith("a1"):
+            data = target[2:]
+            data += "=" * (-len(data) % 4)
+            try:
+                return base64.urlsafe_b64decode(data).decode("utf-8", "replace")
+            except (ValueError, UnicodeDecodeError):
+                return href
+    return href
+
+
+def _parse_bing(page):
+    results = []
+    for block in page.split('class="b_algo"')[1:]:
+        match = re.search(r'<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>', block, re.S)
+        if not match:
+            continue
+        url = _decode_bing_link(match.group(1))
+        title = _strip_html(match.group(2))
+        if not title or not url.startswith("http"):
+            continue
+        snippet_match = re.search(r'<p[^>]*>(.*?)</p>', block, re.S)
+        snippet = _strip_html(snippet_match.group(1))[:300] if snippet_match else ""
+        entry = f"{len(results) + 1}. {title}\n{url}"
+        if snippet:
+            entry += f"\n{snippet}"
+        results.append(entry)
+        if len(results) >= _MAX_SEARCH_RESULTS:
+            break
+    return results
+
+
+def _parse_duckduckgo(page):
+    links = re.findall(r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', page, re.S)
+    snippets = re.findall(r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>', page, re.S)
+    results = []
+    for index, (href, title) in enumerate(links[:_MAX_SEARCH_RESULTS]):
+        url = _decode_duckduckgo_link(html.unescape(href))
+        clean_title = _strip_html(title)
+        if not clean_title or not url.startswith("http"):
+            continue
+        snippet = _strip_html(snippets[index])[:300] if index < len(snippets) else ""
+        entry = f"{len(results) + 1}. {clean_title}\n{url}"
+        if snippet:
+            entry += f"\n{snippet}"
+        results.append(entry)
+    return results
+
+
+async def _fetch_search_page(session, url, query):
+    async with session.get(url, params={"q": query}, headers=_SEARCH_HEADERS) as response:
+        if response.status != 200:
+            return ""
+        return await response.text()
+
+
+async def _web_search(query, seen=None):
+    query = query.strip()
+    if not query:
+        return "Requête vide."
+    if seen is not None:
+        key = query.lower()
+        if key in seen:
+            return "Cette recherche a déjà été effectuée ; utilise les résultats précédents."
+        seen.add(key)
+    async with ClientSession(timeout=ClientTimeout(total=25)) as session:
+        results = _parse_bing(await _fetch_search_page(session, _BING_SEARCH_URL, query))
+        if not results:
+            results = _parse_duckduckgo(await _fetch_search_page(session, _DDG_SEARCH_URL, query))
+    if not results:
+        return "Aucun résultat trouvé (les moteurs de recherche ont peut-être bloqué la requête)."
+    return f"Résultats de recherche pour « {query} » :\n\n" + "\n\n".join(results)
+
+
+async def _assert_public_host(host):
+    infos = await asyncio.get_running_loop().getaddrinfo(host, None)
+    addresses = {info[4][0] for info in infos}
+    if not addresses:
+        raise ValueError("hôte introuvable")
+    for address in addresses:
+        ip = ipaddress.ip_address(address)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+            raise ValueError("adresse locale ou privée")
+
+
+def _html_to_text(raw, content_type):
+    charset = "utf-8"
+    match = re.search(r"charset=([\w.-]+)", content_type, re.I)
+    if match:
+        charset = match.group(1)
+    text = raw.decode(charset, "replace")
+    text = re.sub(r"(?is)<(script|style|noscript|svg|head)[^>]*>.*?</\1>", " ", text)
+    text = re.sub(r"(?i)<br\s*/?>|</(p|div|li|tr|h[1-6])>", "\n", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = re.sub(r"[ \t\r\f\v]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n", text)
+    return text.strip()
+
+
+async def _open_url(url):
+    target = url.strip()
+    if not target:
+        return "URL vide."
+    raw = b""
+    content_type = ""
+    for _ in range(4):
+        parsed = urlparse(target)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return "URL invalide (http ou https attendu)."
+        try:
+            await _assert_public_host(parsed.hostname)
+        except (ValueError, OSError):
+            return "Cette adresse est refusée (hôte local ou privé)."
+        async with ClientSession(timeout=ClientTimeout(total=25)) as session:
+            async with session.get(target, headers={"User-Agent": _BROWSER_UA}, allow_redirects=False) as response:
+                if response.status in (301, 302, 303, 307, 308):
+                    location = response.headers.get("Location")
+                    if not location:
+                        return "Redirection invalide."
+                    target = urljoin(target, location)
+                    continue
+                if response.status >= 400:
+                    return f"La page a renvoyé HTTP {response.status}."
+                content_type = response.headers.get("Content-Type", "")
+                raw = await response.content.read(_MAX_PAGE_BYTES)
+        break
+    else:
+        return "Trop de redirections."
+
+    if "html" not in content_type and not content_type.startswith("text/"):
+        return f"Contenu non textuel ignoré ({content_type or 'type inconnu'})."
+    text = _html_to_text(raw, content_type)
+    if not text:
+        return "La page ne contient pas de texte lisible."
+    if len(text) > _MAX_PAGE_CHARS:
+        text = text[:_MAX_PAGE_CHARS] + "\n\n[page tronquée]"
+    return f"Contenu de {target} :\n\n{text}"
+
+
+async def _run_tool(name, arguments, seen):
+    try:
+        if name == "web_search":
+            return await _web_search(str(arguments.get("query") or ""), seen)
+        if name == "open_url":
+            return await _open_url(str(arguments.get("url") or ""))
+    except (ClientConnectorError, asyncio.TimeoutError, OSError) as exc:
+        return f"Échec de la requête web : {exc}"
+    return f"Outil inconnu : {name}"
+
+
+def _tool_label(name, arguments):
+    if name == "web_search":
+        return f"🔎 Recherche web : {str(arguments.get('query') or '')[:80]}"
+    if name == "open_url":
+        return f"🌐 Ouverture : {str(arguments.get('url') or '')[:100]}"
+    return None
+
+
+async def _write_event(response, payload):
+    await response.write(b"data: " + json.dumps(payload, ensure_ascii=False).encode("utf-8") + b"\n\n")
+
+
+async def _stream_round(session, base_url, model, messages, config, tools, response, tool_choice="auto"):
+    body = {
+        "model": model,
+        "messages": messages,
+        "temperature": float(config["temperature"]),
+        "max_tokens": int(config["max_tokens"]),
+        "stream": True,
+    }
+    if tools:
+        body["tools"] = tools
+        body["tool_choice"] = tool_choice
+    url = base_url.rstrip("/") + "/chat/completions"
+    upstream = await session.post(url, json=body)
+    if tools and upstream.status in (400, 422):
+        await upstream.text()
+        upstream.release()
+        body.pop("tools", None)
+        body.pop("tool_choice", None)
+        upstream = await session.post(url, json=body)
+    if upstream.status != 200:
+        detail = await upstream.text()
+        upstream.release()
+        raise web.HTTPBadGateway(text=_error_message(detail))
+
+    content_parts = []
+    calls = {}
+    try:
+        async for raw_line in upstream.content:
+            line = raw_line.decode("utf-8", "replace").strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                chunk = json.loads(data)
+            except ValueError:
+                continue
+            choice = (chunk.get("choices") or [{}])[0]
+            delta = choice.get("delta") or {}
+            piece = delta.get("content")
+            if piece:
+                content_parts.append(piece)
+                await _write_event(response, {"choices": [{"delta": {"content": piece}}]})
+            reasoning = delta.get("reasoning_content")
+            if reasoning:
+                await _write_event(response, {"choices": [{"delta": {"reasoning_content": reasoning}}]})
+            for tool_call in delta.get("tool_calls") or []:
+                index = tool_call.get("index", 0)
+                entry = calls.setdefault(
+                    index, {"id": "", "type": "function", "function": {"name": "", "arguments": ""}}
+                )
+                if tool_call.get("id"):
+                    entry["id"] = tool_call["id"]
+                function = tool_call.get("function") or {}
+                entry["function"]["name"] += function.get("name") or ""
+                entry["function"]["arguments"] += function.get("arguments") or ""
+    finally:
+        upstream.release()
+    return "".join(content_parts), [calls[key] for key in sorted(calls)]
+
+
+async def _run_agent(session, base_url, model, messages, config, web_enabled, response):
+    tools = WEB_TOOLS
+    seen = set()
+    answered = False
+    for _ in range(_MAX_TOOL_ROUNDS):
+        content, calls = await _stream_round(session, base_url, model, messages, config, tools, response)
+        if not calls:
+            answered = True
+            break
+        messages.append({"role": "assistant", "content": content, "tool_calls": calls})
+        for call in calls:
+            function = call.get("function") or {}
+            name = function.get("name") or ""
+            try:
+                arguments = json.loads(function.get("arguments") or "{}")
+            except ValueError:
+                arguments = {}
+            if not isinstance(arguments, dict):
+                arguments = {}
+            if web_enabled:
+                label = _tool_label(name, arguments)
+                if label:
+                    await _write_event(response, {"bionic_event": "tool", "label": label})
+                result = await _run_tool(name, arguments, seen)
+            else:
+                result = "Accès Internet désactivé dans les réglages de Bionic. Réponds sans utiliser d'outil."
+            messages.append(
+                {"role": "tool", "tool_call_id": call.get("id") or f"call_{len(messages)}", "content": result}
+            )
+        if not web_enabled:
+            break
+    if answered:
+        return
+    messages.append(
+        {"role": "system", "content": "Tu as assez d'informations. Réponds maintenant en texte, sans appeler d'outil."}
+    )
+    await _stream_round(session, base_url, model, messages, config, tools, response, tool_choice="none")
+
+
 @routes.get("/bionic_chat/config")
 async def bionic_get_config(request):
     config = load_config()
@@ -164,22 +497,14 @@ async def bionic_chat(request):
 
     config = load_config()
     base_url = config["base_url"]
+    web_enabled = bool(config["web_enabled"])
     session = ClientSession(timeout=ClientTimeout(total=None, sock_connect=15, sock_read=600))
     try:
         model = await _resolve_model(session, base_url, payload.get("model") or config["model"])
         system_prompt = config["system_prompt"].strip()
-        body = {
-            "model": model,
-            "messages": ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages,
-            "temperature": float(payload.get("temperature", config["temperature"])),
-            "max_tokens": int(payload.get("max_tokens", config["max_tokens"])),
-            "stream": True,
-        }
-        upstream = await session.post(base_url.rstrip("/") + "/chat/completions", json=body)
-        if upstream.status != 200:
-            detail = await upstream.text()
-            upstream.release()
-            return web.json_response({"error": _error_message(detail)}, status=502)
+        if web_enabled:
+            system_prompt = (system_prompt + "\n\n" + WEB_SYSTEM_HINT).strip()
+        conversation = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
 
         response = web.StreamResponse(
             headers={
@@ -190,14 +515,28 @@ async def bionic_chat(request):
         )
         await response.prepare(request)
         try:
-            async for chunk in upstream.content.iter_any():
-                await response.write(chunk)
+            await _run_agent(session, base_url, model, conversation, config, web_enabled, response)
+            await response.write(b"data: [DONE]\n\n")
+            await response.write_eof()
+        except web.HTTPBadGateway as exc:
+            try:
+                await _write_event(response, {"error": exc.text})
+                await response.write(b"data: [DONE]\n\n")
+                await response.write_eof()
+            except (ClientConnectionResetError, ConnectionResetError):
+                pass
         except (ClientConnectionResetError, ConnectionResetError, asyncio.CancelledError):
             pass
-        finally:
-            upstream.release()
-        await response.write_eof()
+        except Exception as exc:  # noqa: BLE001 - streaming errors must reach the panel
+            try:
+                await _write_event(response, {"error": str(exc)})
+                await response.write(b"data: [DONE]\n\n")
+                await response.write_eof()
+            except (ClientConnectionResetError, ConnectionResetError):
+                pass
         return response
+    except web.HTTPBadGateway as exc:
+        return web.json_response({"error": exc.text}, status=502)
     except ClientConnectorError:
         return web.json_response({"error": f"LM Studio injoignable sur {base_url}."}, status=502)
     finally:

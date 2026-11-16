@@ -12,6 +12,7 @@ Un tchat façon Bionic (LM Studio) directement dans ComfyUI, avec entrée audio,
 - Bouton `⚡ Run` : écrit le prompt dans la node puis lance le workflow, comme le bouton Run de ComfyUI.
 - Lancement automatique du workflow dès que le modèle a terminé sa réponse (actif par défaut, désactivable dans ⚙).
 - Envoi automatique de la transcription audio dès l'arrêt du micro (actif par défaut, désactivable dans ⚙).
+- Accès Internet : le modèle peut chercher sur le Web et ouvrir des pages pour répondre (actif par défaut, désactivable dans ⚙).
 
 ## Prérequis
 
@@ -58,6 +59,7 @@ Le bouton ⚙ du panneau permet de modifier :
 - la température ;
 - le lancement automatique du workflow après la réponse ;
 - l'envoi automatique de la transcription audio après le micro ;
+- l'accès Internet (recherche web et ouverture d'URL) ;
 - le modèle et la langue de transcription audio.
 
 Les réglages sont enregistrés dans `ComfyUI/user/default/bionic_chat/config.json`.
@@ -67,6 +69,7 @@ Les réglages sont enregistrés dans `ComfyUI/user/default/bionic_chat/config.js
 - `nodes.py` : node `BionicChatPrompt` (sortie `STRING`).
 - `bionic_server.py` : routes `/bionic_chat/config`, `/bionic_chat/chat` (proxy streaming vers LM Studio) et `/bionic_chat/transcribe` (Whisper local).
 - `web/bionic_chat.js` et `web/bionic_chat.css` : panneau de chat, enregistrement audio, pièces jointes et déclenchement du workflow.
+- Outils web : `web_search` (Bing, sans clé, avec repli DuckDuckGo) et `open_url` (lecture de page), exécutés par le serveur dans une boucle d'appels d'outils LM Studio (3 tours, puis réponse forcée en texte). Les adresses locales et privées sont refusées.
 
 ## Limites
 
