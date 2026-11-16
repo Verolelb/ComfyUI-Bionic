@@ -343,6 +343,12 @@
   font-weight: 600;
 }
 
+.bionic-btn.bionic-stop {
+  border-color: color-mix(in srgb, #d9534f 55%, transparent);
+  color: #ff9a9a;
+  font-weight: 600;
+}
+
 .bionic-btn.bionic-run {
   border-color: color-mix(in srgb, var(--bionic-accent) 55%, transparent);
   background: color-mix(in srgb, var(--bionic-accent) 16%, transparent);

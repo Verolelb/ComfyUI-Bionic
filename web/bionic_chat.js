@@ -19,6 +19,7 @@ const I18N = {
     webOnTitle: "Recherche Internet activée — cliquer pour désactiver",
     webOffTitle: "Recherche Internet désactivée — cliquer pour activer",
     runTitle: "Envoyer le texte dans la node Bionic Chat Prompt et lancer le workflow",
+    stopTitle: "Arrêter la génération ou le workflow en cours",
     send: "Envoyer",
     stop: "Stop",
     serverUrl: "Serveur LM Studio (OpenAI compatible)",
@@ -68,6 +69,9 @@ const I18N = {
     settingsNotSaved: "Réglages non enregistrés : {0}",
     settingsNotLoaded: "Réglages pas encore chargés.",
     settingsSaved: "Réglages enregistrés",
+    generationStopped: "Génération arrêtée",
+    workflowStopped: "Workflow arrêté",
+    stopFailed: "Arrêt impossible : {0}",
     noText: "Aucun texte à envoyer dans la node.",
     cannotCreate: "Impossible de créer la node Bionic Chat Prompt.",
     noPromptInput: "La node Bionic Chat Prompt n'a pas d'entrée prompt.",
@@ -100,6 +104,7 @@ const I18N = {
     webOnTitle: "Web search enabled — click to disable",
     webOffTitle: "Web search disabled — click to enable",
     runTitle: "Send the text into the Bionic Chat Prompt node and run the workflow",
+    stopTitle: "Stop the current generation or workflow",
     send: "Send",
     stop: "Stop",
     serverUrl: "LM Studio server (OpenAI compatible)",
@@ -149,6 +154,9 @@ const I18N = {
     settingsNotSaved: "Settings not saved: {0}",
     settingsNotLoaded: "Settings are not loaded yet.",
     settingsSaved: "Settings saved",
+    generationStopped: "Generation stopped",
+    workflowStopped: "Workflow stopped",
+    stopFailed: "Could not stop: {0}",
     noText: "No text to send into the node.",
     cannotCreate: "Could not create the Bionic Chat Prompt node.",
     noPromptInput: "The Bionic Chat Prompt node has no prompt input.",
@@ -289,6 +297,7 @@ function buildPanel() {
         <input type="file" id="bionic-file" accept="image/*" multiple hidden>
         <span class="bionic-rec-time" id="bionic-rec-time"></span>
         <span class="bionic-spacer"></span>
+        <button type="button" class="bionic-btn bionic-stop" id="bionic-stop" data-i18n-title="stopTitle">⏹</button>
         <button type="button" class="bionic-btn bionic-run" id="bionic-run" data-i18n-title="runTitle">⚡ Run</button>
         <button type="button" class="bionic-btn bionic-send" id="bionic-send" data-i18n="send">Envoyer</button>
       </div>
@@ -475,6 +484,7 @@ function bindEvents() {
   els.mic.addEventListener("click", toggleRecording);
   document.getElementById("bionic-web").addEventListener("click", toggleWeb);
   document.getElementById("bionic-run").addEventListener("click", () => runPrompt(els.input.value));
+  document.getElementById("bionic-stop").addEventListener("click", stopCurrent);
   els.send.addEventListener("click", () => {
     if (state.busy) {
       stopStreaming();
@@ -820,7 +830,7 @@ async function sendMessage() {
   if (state.config?.auto_run !== false && !assistant.error && !assistant.aborted && assistant.content.trim()) {
     await runPrompt(assistant.content);
   }
-  updateTargetLabel();
+  if (!assistant.aborted) updateTargetLabel();
 }
 
 function setBusyUi(busy) {
@@ -834,6 +844,20 @@ function setBusyUi(busy) {
 
 function stopStreaming() {
   if (state.abort) state.abort.abort();
+}
+
+async function stopCurrent() {
+  if (state.busy) {
+    stopStreaming();
+    setStatus(t("generationStopped"));
+    return;
+  }
+  try {
+    await api.fetchApi("/interrupt", { method: "POST" });
+    setStatus(t("workflowStopped"));
+  } catch (error) {
+    toast("error", t("stopFailed", error?.message || error));
+  }
 }
 
 async function streamChat(assistant) {
