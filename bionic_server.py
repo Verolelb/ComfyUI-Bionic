@@ -21,6 +21,13 @@ routes = PromptServer.instance.routes
 
 DEFAULT_SYSTEM_PROMPT = (
     "Tu es Bionic, l'assistant de création de prompts de ce ComfyUI. "
+    "RÈGLE ABSOLUE : quand l'utilisateur demande une image, un prompt ou une scène, tu ne poses AUCUNE question de clarification. "
+    "Tu fais des choix raisonnables et tu réponds UNIQUEMENT avec le prompt final, en texte brut, "
+    "sans préambule, sans question, sans commentaire."
+)
+
+LEGACY_SYSTEM_PROMPT = (
+    "Tu es Bionic, l'assistant de création de prompts de ce ComfyUI. "
     "Tu discutes avec l'utilisateur, tu analyses les images et les notes vocales qu'il joint, "
     "et tu produis des prompts précis, prêts à être exécutés dans le graphe. "
     "Quand l'utilisateur demande un prompt, réponds avec le prompt final uniquement, sans préambule ni commentaire."
@@ -58,6 +65,8 @@ def load_config():
         for key in CONFIG_DEFAULTS:
             if key in saved:
                 config[key] = saved[key]
+    if str(config["system_prompt"]).strip() == LEGACY_SYSTEM_PROMPT.strip():
+        config["system_prompt"] = DEFAULT_SYSTEM_PROMPT
     return config
 
 
@@ -431,14 +440,12 @@ async def _stream_round(session, base_url, model, messages, config, tools, respo
 
 
 async def _run_agent(session, base_url, model, messages, config, web_enabled, response):
-    tools = WEB_TOOLS
+    tools = WEB_TOOLS if web_enabled else None
     seen = set()
-    answered = False
     for _ in range(_MAX_TOOL_ROUNDS):
         content, calls = await _stream_round(session, base_url, model, messages, config, tools, response)
         if not calls:
-            answered = True
-            break
+            return
         messages.append({"role": "assistant", "content": content, "tool_calls": calls})
         for call in calls:
             function = call.get("function") or {}
@@ -449,22 +456,15 @@ async def _run_agent(session, base_url, model, messages, config, web_enabled, re
                 arguments = {}
             if not isinstance(arguments, dict):
                 arguments = {}
-            if web_enabled:
-                label = _tool_label(name, arguments)
-                if label:
-                    await _write_event(response, {"bionic_event": "tool", "label": label})
-                result = await _run_tool(name, arguments, seen)
-            else:
-                result = "Accès Internet désactivé dans les réglages de Bionic. Réponds sans utiliser d'outil."
+            label = _tool_label(name, arguments)
+            if label:
+                await _write_event(response, {"bionic_event": "tool", "label": label})
+            result = await _run_tool(name, arguments, seen)
             messages.append(
                 {"role": "tool", "tool_call_id": call.get("id") or f"call_{len(messages)}", "content": result}
             )
-        if not web_enabled:
-            break
-    if answered:
-        return
     messages.append(
-        {"role": "system", "content": "Tu as assez d'informations. Réponds maintenant en texte, sans appeler d'outil."}
+        {"role": "user", "content": "Réponds maintenant en texte, sans appeler d'outil."}
     )
     await _stream_round(session, base_url, model, messages, config, tools, response, tool_choice="none")
 
