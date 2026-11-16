@@ -90,6 +90,7 @@ function buildPanel() {
       <div class="bionic-tools">
         <button type="button" class="bionic-icon-btn" id="bionic-mic" title="Entrée audio (Voxtral/Whisper local)">🎙</button>
         <button type="button" class="bionic-icon-btn" id="bionic-attach" title="Joindre une image">🖼</button>
+        <button type="button" class="bionic-icon-btn" id="bionic-web" title="Recherche Internet" aria-pressed="false">🌐</button>
         <input type="file" id="bionic-file" accept="image/*" multiple hidden>
         <span class="bionic-rec-time" id="bionic-rec-time"></span>
         <span class="bionic-spacer"></span>
@@ -188,6 +189,7 @@ function bindEvents() {
   });
 
   els.mic.addEventListener("click", toggleRecording);
+  document.getElementById("bionic-web").addEventListener("click", toggleWeb);
   document.getElementById("bionic-run").addEventListener("click", () => runPrompt(els.input.value));
   els.send.addEventListener("click", () => {
     if (state.busy) {
@@ -260,6 +262,7 @@ async function loadConfig() {
     }
     renderModels();
     fillSettings();
+    updateWebButton();
     setStatus(
       data.error
         ? `${data.error} — démarre le serveur LM Studio (Developer → Start server).`
@@ -318,6 +321,34 @@ async function saveSettings() {
     state.els.settings.classList.add("bionic-hidden");
     await loadConfig();
     toast("success", "Réglages enregistrés");
+  }
+}
+
+function updateWebButton() {
+  const button = document.getElementById("bionic-web");
+  if (!button) return;
+  const enabled = state.config?.web_enabled !== false;
+  button.classList.toggle("bionic-web-on", enabled);
+  button.setAttribute("aria-pressed", String(enabled));
+  button.title = enabled
+    ? "Recherche Internet activée — cliquer pour désactiver"
+    : "Recherche Internet désactivée — cliquer pour activer";
+}
+
+async function toggleWeb() {
+  if (!state.config) {
+    toast("warning", "Réglages pas encore chargés.");
+    return;
+  }
+  const enabled = state.config.web_enabled === false;
+  state.config.web_enabled = enabled;
+  updateWebButton();
+  if (await saveConfig({ web_enabled: enabled })) {
+    fillSettings();
+    setStatus(enabled ? "Recherche Internet activée" : "Recherche Internet désactivée");
+  } else {
+    state.config.web_enabled = !enabled;
+    updateWebButton();
   }
 }
 

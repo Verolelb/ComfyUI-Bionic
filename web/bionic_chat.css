@@ -326,6 +326,11 @@
   animation: bionic-pulse 1.2s ease-in-out infinite;
 }
 
+.bionic-icon-btn.bionic-web-on {
+  border-color: var(--bionic-accent);
+  background: color-mix(in srgb, var(--bionic-accent) 22%, transparent);
+}
+
 @keyframes bionic-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgb(217 83 79 / 45%); }
   50% { box-shadow: 0 0 0 6px rgb(217 83 79 / 0%); }
