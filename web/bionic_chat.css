@@ -1,0 +1,426 @@
+#bionic-chat-root {
+  --bionic-accent: #6ea8fe;
+  --bionic-accent-strong: #3d7dfa;
+  --bionic-bg: var(--comfy-menu-bg, #1e1f22);
+  --bionic-panel: color-mix(in srgb, var(--comfy-menu-bg, #1e1f22) 92%, #000 8%);
+  --bionic-fg: var(--fg-color, #e6e6e6);
+  --bionic-muted: color-mix(in srgb, var(--fg-color, #e6e6e6) 55%, transparent);
+  --bionic-border: var(--border-color, #3a3b40);
+  --bionic-input: var(--comfy-input-bg, #2a2b30);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+#bionic-launcher {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--bionic-border);
+  border-radius: 999px;
+  background: var(--bionic-panel);
+  color: var(--bionic-fg);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 35%);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+#bionic-launcher:hover {
+  transform: translateY(-1px);
+  border-color: var(--bionic-accent);
+}
+
+#bionic-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 74px;
+  z-index: 10001;
+  display: flex;
+  flex-direction: column;
+  width: min(430px, calc(100vw - 36px));
+  height: min(760px, calc(100vh - 110px));
+  overflow: hidden;
+  border: 1px solid var(--bionic-border);
+  border-radius: 16px;
+  background: var(--bionic-panel);
+  color: var(--bionic-fg);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 45%);
+}
+
+#bionic-panel.bionic-hidden {
+  display: none;
+}
+
+.bionic-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--bionic-border);
+}
+
+.bionic-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.bionic-title span {
+  color: var(--bionic-accent);
+}
+
+.bionic-header-btns {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.bionic-model-row {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--bionic-border);
+}
+
+.bionic-model-row select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--bionic-border);
+  border-radius: 8px;
+  background: var(--bionic-input);
+  color: var(--bionic-fg);
+  font-size: 12px;
+  outline: none;
+}
+
+#bionic-messages {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.bionic-empty {
+  margin: auto;
+  max-width: 290px;
+  color: var(--bionic-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.bionic-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+}
+
+.bionic-msg.user {
+  align-items: flex-end;
+}
+
+.bionic-bubble {
+  max-width: 92%;
+  padding: 9px 12px;
+  border: 1px solid var(--bionic-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bionic-input) 70%, transparent);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.bionic-msg.user .bionic-bubble {
+  border-color: transparent;
+  background: var(--bionic-accent-strong);
+  color: #fff;
+}
+
+.bionic-msg.error .bionic-bubble {
+  border-color: #b64141;
+  color: #ffb4b4;
+}
+
+.bionic-text {
+  white-space: pre-wrap;
+}
+
+.bionic-text.bionic-typing::after {
+  content: "…";
+  animation: bionic-dots 1.1s steps(3, end) infinite;
+}
+
+@keyframes bionic-dots {
+  0% { opacity: 0.2; }
+  50% { opacity: 1; }
+  100% { opacity: 0.2; }
+}
+
+.bionic-reasoning {
+  margin-bottom: 6px;
+  color: var(--bionic-muted);
+  font-size: 11px;
+}
+
+.bionic-reasoning summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.bionic-reasoning div {
+  margin-top: 4px;
+  white-space: pre-wrap;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.bionic-message-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.bionic-message-images img {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--bionic-border);
+}
+
+.bionic-message-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.bionic-link {
+  border: 1px solid var(--bionic-border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--bionic-muted);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.bionic-link:hover {
+  color: var(--bionic-fg);
+  border-color: var(--bionic-accent);
+}
+
+#bionic-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 14px;
+}
+
+#bionic-attachments:empty {
+  display: none;
+}
+
+.bionic-thumb {
+  position: relative;
+  width: 52px;
+  height: 52px;
+}
+
+.bionic-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--bionic-border);
+}
+
+.bionic-thumb button {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 17px;
+  height: 17px;
+  border: none;
+  border-radius: 50%;
+  background: #b64141;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bionic-status {
+  padding: 4px 14px;
+  color: var(--bionic-muted);
+  font-size: 11px;
+  min-height: 18px;
+}
+
+.bionic-composer {
+  border-top: 1px solid var(--bionic-border);
+  padding: 10px 14px 12px;
+}
+
+#bionic-input {
+  width: 100%;
+  min-height: 56px;
+  max-height: 180px;
+  resize: none;
+  padding: 9px 10px;
+  border: 1px solid var(--bionic-border);
+  border-radius: 10px;
+  background: var(--bionic-input);
+  color: var(--bionic-fg);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  outline: none;
+}
+
+#bionic-input:focus {
+  border-color: var(--bionic-accent);
+}
+
+.bionic-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.bionic-spacer {
+  flex: 1;
+}
+
+.bionic-icon-btn,
+.bionic-btn {
+  border: 1px solid var(--bionic-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bionic-fg);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.bionic-icon-btn {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.bionic-icon-btn:hover,
+.bionic-btn:hover {
+  border-color: var(--bionic-accent);
+}
+
+.bionic-icon-btn.bionic-active {
+  border-color: #d9534f;
+  background: rgb(217 83 79 / 20%);
+  animation: bionic-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes bionic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(217 83 79 / 45%); }
+  50% { box-shadow: 0 0 0 6px rgb(217 83 79 / 0%); }
+}
+
+.bionic-btn.bionic-send {
+  border-color: transparent;
+  background: var(--bionic-accent-strong);
+  color: #fff;
+  font-weight: 600;
+}
+
+.bionic-btn.bionic-run {
+  border-color: color-mix(in srgb, var(--bionic-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--bionic-accent) 16%, transparent);
+  color: var(--bionic-accent);
+  font-weight: 600;
+}
+
+.bionic-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.bionic-rec-time {
+  color: #ff8d8d;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+#bionic-panel.bionic-drop::after {
+  content: "Dépose une image";
+  position: absolute;
+  inset: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--bionic-accent);
+  border-radius: 12px;
+  background: rgb(0 0 0 / 55%);
+  color: var(--bionic-accent);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+#bionic-settings {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--bionic-panel);
+  overflow-y: auto;
+}
+
+#bionic-settings.bionic-hidden {
+  display: none;
+}
+
+#bionic-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--bionic-muted);
+}
+
+#bionic-settings input,
+#bionic-settings textarea,
+#bionic-settings select {
+  padding: 7px 8px;
+  border: 1px solid var(--bionic-border);
+  border-radius: 8px;
+  background: var(--bionic-input);
+  color: var(--bionic-fg);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+#bionic-settings textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+#bionic-settings .bionic-settings-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bionic-settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
