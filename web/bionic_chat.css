@@ -414,6 +414,21 @@
   resize: vertical;
 }
 
+#bionic-settings label.bionic-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--bionic-fg);
+  font-size: 12px;
+}
+
+#bionic-settings label.bionic-check input {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  accent-color: var(--bionic-accent-strong);
+}
+
 #bionic-settings .bionic-settings-title {
   font-size: 14px;
   font-weight: 700;

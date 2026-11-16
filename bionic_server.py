@@ -8,6 +8,7 @@ import wave
 
 import numpy as np
 from aiohttp import ClientConnectorError, ClientSession, ClientTimeout, web
+from aiohttp.client_exceptions import ClientConnectionResetError
 
 import folder_paths
 from server import PromptServer
@@ -29,6 +30,7 @@ CONFIG_DEFAULTS = {
     "system_prompt": DEFAULT_SYSTEM_PROMPT,
     "transcribe_model": "small",
     "transcribe_language": "fr",
+    "auto_run": True,
 }
 
 _WHISPER_MODELS = {}
@@ -59,7 +61,9 @@ def save_config(patch):
         if key not in patch:
             continue
         value = patch[key]
-        if isinstance(default, float):
+        if isinstance(default, bool):
+            config[key] = bool(value)
+        elif isinstance(default, float):
             config[key] = max(0.0, min(2.0, float(value)))
         elif isinstance(default, int):
             config[key] = max(1, int(value))
@@ -187,7 +191,7 @@ async def bionic_chat(request):
         try:
             async for chunk in upstream.content.iter_any():
                 await response.write(chunk)
-        except (ConnectionResetError, asyncio.CancelledError):
+        except (ClientConnectionResetError, ConnectionResetError, asyncio.CancelledError):
             pass
         finally:
             upstream.release()

@@ -108,6 +108,10 @@ function buildPanel() {
       <label>Température
         <input id="bionic-cfg-temp" type="number" min="0" max="2" step="0.05">
       </label>
+      <label class="bionic-check">
+        <input id="bionic-cfg-autorun" type="checkbox">
+        Lancer automatiquement le workflow après la réponse
+      </label>
       <label>Modèle de transcription audio
         <select id="bionic-cfg-whisper">
           <option value="tiny">tiny (rapide, ~75 Mo)</option>
@@ -280,15 +284,21 @@ function fillSettings() {
   document.getElementById("bionic-cfg-url").value = state.config.base_url || "";
   document.getElementById("bionic-cfg-system").value = state.config.system_prompt || "";
   document.getElementById("bionic-cfg-temp").value = state.config.temperature;
+  document.getElementById("bionic-cfg-autorun").checked = state.config.auto_run !== false;
   document.getElementById("bionic-cfg-whisper").value = state.config.transcribe_model;
   document.getElementById("bionic-cfg-language").value = state.config.transcribe_language;
 }
 
 async function saveSettings() {
+  if (!state.config) {
+    toast("warning", "Réglages pas encore chargés.");
+    return;
+  }
   const patch = {
     base_url: document.getElementById("bionic-cfg-url").value.trim(),
     system_prompt: document.getElementById("bionic-cfg-system").value,
     temperature: Number(document.getElementById("bionic-cfg-temp").value),
+    auto_run: document.getElementById("bionic-cfg-autorun").checked,
     transcribe_model: document.getElementById("bionic-cfg-whisper").value,
     transcribe_language: document.getElementById("bionic-cfg-language").value,
   };
@@ -467,6 +477,10 @@ async function sendMessage() {
   state.busy = false;
   setBusyUi(false);
   renderMessages();
+
+  if (state.config?.auto_run !== false && !assistant.error && !assistant.aborted && assistant.content.trim()) {
+    await runPrompt(assistant.content);
+  }
 }
 
 function setBusyUi(busy) {
@@ -540,7 +554,9 @@ async function streamChat(assistant) {
     }
     if (buffer.trim()) handleSseChunk(buffer, assistant);
   } catch (error) {
-    if (error.name !== "AbortError") {
+    if (error.name === "AbortError") {
+      assistant.aborted = true;
+    } else {
       assistant.error = true;
       assistant.content = assistant.content || `Erreur : ${error.message || error}`;
     }
