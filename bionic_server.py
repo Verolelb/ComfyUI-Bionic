@@ -31,6 +31,7 @@ CONFIG_DEFAULTS = {
     "transcribe_model": "small",
     "transcribe_language": "fr",
     "auto_run": True,
+    "auto_send_audio": True,
 }
 
 _WHISPER_MODELS = {}

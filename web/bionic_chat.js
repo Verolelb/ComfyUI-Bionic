@@ -112,6 +112,10 @@ function buildPanel() {
         <input id="bionic-cfg-autorun" type="checkbox">
         Lancer automatiquement le workflow après la réponse
       </label>
+      <label class="bionic-check">
+        <input id="bionic-cfg-autoaudio" type="checkbox">
+        Envoyer automatiquement la transcription après le micro
+      </label>
       <label>Modèle de transcription audio
         <select id="bionic-cfg-whisper">
           <option value="tiny">tiny (rapide, ~75 Mo)</option>
@@ -285,6 +289,7 @@ function fillSettings() {
   document.getElementById("bionic-cfg-system").value = state.config.system_prompt || "";
   document.getElementById("bionic-cfg-temp").value = state.config.temperature;
   document.getElementById("bionic-cfg-autorun").checked = state.config.auto_run !== false;
+  document.getElementById("bionic-cfg-autoaudio").checked = state.config.auto_send_audio !== false;
   document.getElementById("bionic-cfg-whisper").value = state.config.transcribe_model;
   document.getElementById("bionic-cfg-language").value = state.config.transcribe_language;
 }
@@ -299,6 +304,7 @@ async function saveSettings() {
     system_prompt: document.getElementById("bionic-cfg-system").value,
     temperature: Number(document.getElementById("bionic-cfg-temp").value),
     auto_run: document.getElementById("bionic-cfg-autorun").checked,
+    auto_send_audio: document.getElementById("bionic-cfg-autoaudio").checked,
     transcribe_model: document.getElementById("bionic-cfg-whisper").value,
     transcribe_language: document.getElementById("bionic-cfg-language").value,
   };
@@ -820,6 +826,9 @@ async function transcribeBlob(blob) {
     autoGrowInput();
     input.focus();
     setStatus("Transcription ajoutée");
+    if (state.config?.auto_send_audio !== false && !state.busy) {
+      await sendMessage();
+    }
   } catch (error) {
     toast("error", `Transcription impossible : ${error.message || error}`);
     setStatus("Transcription impossible");
