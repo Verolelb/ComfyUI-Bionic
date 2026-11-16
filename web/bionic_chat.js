@@ -506,8 +506,10 @@ function bindEvents() {
     }
   });
   els.input.addEventListener("input", autoGrowInput);
-  els.input.addEventListener("paste", handlePaste);
-  els.panel.addEventListener("paste", handlePaste);
+  els.panel.addEventListener("paste", (event) => {
+    if (event.target.closest("#bionic-settings")) return;
+    handlePaste(event);
+  });
 
   els.panel.addEventListener("dragover", (event) => {
     event.preventDefault();
