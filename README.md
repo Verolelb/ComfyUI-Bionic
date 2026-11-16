@@ -1,5 +1,7 @@
 # ComfyUI-Bionic
 
+[English](README.en.md) · **Français**
+
 Un tchat façon Bionic (LM Studio) directement dans ComfyUI, avec entrée audio, entrée vision et une node réceptrice qui reçoit le prompt et lance le workflow.
 
 ## Fonctionnalités
@@ -62,7 +64,7 @@ Le bouton ⚙ du panneau permet de modifier :
 - l'accès Internet (recherche web et ouverture d'URL), aussi pilotable par le bouton 🌐 à côté du micro ;
 - le modèle et la langue de transcription audio.
 
-Les réglages sont enregistrés dans `ComfyUI/user/default/bionic_chat/config.json`.
+Les réglages sont enregistrés dans `bionic_chat/config.json`, dans le dossier `user` de ComfyUI.
 
 ## Fonctionnement
 
