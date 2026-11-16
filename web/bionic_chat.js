@@ -848,6 +848,17 @@ function stopStreaming() {
   if (state.abort) state.abort.abort();
 }
 
+let streamRenderQueued = false;
+
+function queueStreamRender(assistant) {
+  if (streamRenderQueued) return;
+  streamRenderQueued = true;
+  requestAnimationFrame(() => {
+    streamRenderQueued = false;
+    renderStreaming(assistant);
+  });
+}
+
 async function stopCurrent() {
   if (state.busy) {
     stopStreaming();
@@ -872,7 +883,6 @@ async function streamChat(assistant) {
 
   const controller = new AbortController();
   state.abort = controller;
-  let rendered = null;
 
   try {
     const response = await api.fetchApi("/bionic_chat/chat", {
@@ -903,7 +913,7 @@ async function streamChat(assistant) {
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n/g, "\n");
+      buffer += decoder.decode(value, { stream: true }).replace(/\r/g, "");
 
       let split;
       while ((split = buffer.indexOf("\n\n")) >= 0) {
@@ -913,7 +923,7 @@ async function streamChat(assistant) {
           reader.cancel().catch(() => {});
           return;
         }
-        rendered = renderStreaming(assistant);
+        queueStreamRender(assistant);
       }
     }
     if (buffer.trim()) handleSseChunk(buffer, assistant);
@@ -926,7 +936,6 @@ async function streamChat(assistant) {
     }
   } finally {
     state.abort = null;
-    if (rendered) scrollToBottom();
   }
 }
 

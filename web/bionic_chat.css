@@ -45,6 +45,7 @@
   width: min(430px, calc(100vw - 36px));
   height: min(760px, calc(100vh - 110px));
   overflow: hidden;
+  contain: layout paint;
   border: 1px solid var(--bionic-border);
   border-radius: 16px;
   background: var(--bionic-panel);
