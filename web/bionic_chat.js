@@ -24,7 +24,9 @@ const I18N = {
     stopTitle: "Arrêter la génération ou le workflow en cours",
     send: "Envoyer",
     stop: "Stop",
-    serverUrl: "Serveur LM Studio (OpenAI compatible)",
+    serverUrl: "Serveur (OpenAI compatible)",
+    presetLabel: "Adresse prédéfinie",
+    presetCustom: "Adresse personnalisée",
     systemPrompt: "Prompt système",
     temperature: "Température",
     autoRun: "Lancer automatiquement le workflow après la réponse",
@@ -119,7 +121,9 @@ const I18N = {
     stopTitle: "Stop the current generation or workflow",
     send: "Send",
     stop: "Stop",
-    serverUrl: "LM Studio server (OpenAI compatible)",
+    serverUrl: "Server (OpenAI compatible)",
+    presetLabel: "Preset address",
+    presetCustom: "Custom address",
     systemPrompt: "System prompt",
     temperature: "Temperature",
     autoRun: "Run the workflow automatically after the answer",
@@ -216,6 +220,11 @@ const STT_LANGUAGES = [
   ["it", "sttIt"],
 ];
 const NODE_TITLES = ["Prompt du chat Bionic", "Bionic Chat Prompt"];
+const SERVER_PRESETS = [
+  { name: "LM Studio", url: "http://127.0.0.1:1234/v1" },
+  { name: "Ollama", url: "http://127.0.0.1:11434/v1" },
+  { name: "llama.cpp", url: "http://127.0.0.1:9931/v1" },
+];
 
 const state = {
   config: null,
@@ -337,7 +346,11 @@ function buildPanel() {
         </select>
       </label>
       <label>
-        <span data-i18n="serverUrl">Serveur LM Studio (OpenAI compatible)</span>
+        <span data-i18n="presetLabel">Adresse prédéfinie</span>
+        <select id="bionic-cfg-preset"></select>
+      </label>
+      <label>
+        <span data-i18n="serverUrl">Serveur (OpenAI compatible)</span>
         <input id="bionic-cfg-url" type="text" spellcheck="false">
       </label>
       <label>
@@ -400,6 +413,7 @@ function collectElements() {
     docFile: byId("bionic-doc-file"),
     send: byId("bionic-send"),
     uiLanguage: byId("bionic-cfg-ui-lang"),
+    preset: byId("bionic-cfg-preset"),
   };
 }
 
@@ -420,6 +434,7 @@ function applyLanguage() {
   const panel = document.getElementById("bionic-panel");
   if (panel) panel.dataset.dropLabel = dict.dropImage;
 
+  renderServerPresets();
   renderWhisperOptions();
   renderTranscribeLanguageOptions();
   populateModelPlaceholder();
@@ -435,6 +450,31 @@ function applyLanguage() {
   updateTokenCounter(lastAssistantMessage());
   if (state.messages.length && !state.busy) renderMessages();
   applyNodeLanguage();
+}
+
+function renderServerPresets() {
+  const select = document.getElementById("bionic-cfg-preset");
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = "";
+  const custom = el("option", null, t("presetCustom"));
+  custom.value = "";
+  select.appendChild(custom);
+  for (const preset of SERVER_PRESETS) {
+    const option = el("option", null, `${preset.name} — ${preset.url}`);
+    option.value = preset.url;
+    select.appendChild(option);
+  }
+  select.value = previous || "";
+}
+
+function syncPresetSelect() {
+  const select = document.getElementById("bionic-cfg-preset");
+  const input = document.getElementById("bionic-cfg-url");
+  if (!select || !input) return;
+  const value = input.value.trim().replace(/\/+$/, "");
+  const match = SERVER_PRESETS.find((preset) => preset.url.replace(/\/+$/, "") === value);
+  select.value = match ? match.url : "";
 }
 
 function renderWhisperOptions() {
@@ -502,6 +542,10 @@ function bindEvents() {
   });
   document.getElementById("bionic-cfg-save").addEventListener("click", saveSettings);
   els.uiLanguage.addEventListener("change", changeLanguage);
+  els.preset.addEventListener("change", () => {
+    if (els.preset.value) document.getElementById("bionic-cfg-url").value = els.preset.value;
+  });
+  document.getElementById("bionic-cfg-url").addEventListener("input", syncPresetSelect);
   document.getElementById("bionic-new").addEventListener("click", newConversation);
   document.getElementById("bionic-attach").addEventListener("click", () => els.file.click());
   els.file.addEventListener("change", () => {
@@ -638,6 +682,7 @@ async function saveConfig(patch) {
 function fillSettings() {
   if (!state.config || !document.getElementById("bionic-cfg-url")) return;
   document.getElementById("bionic-cfg-url").value = state.config.base_url || "";
+  syncPresetSelect();
   document.getElementById("bionic-cfg-system").value = state.config.system_prompt || "";
   document.getElementById("bionic-cfg-temp").value = state.config.temperature;
   document.getElementById("bionic-cfg-autorun").checked = state.config.auto_run !== false;
