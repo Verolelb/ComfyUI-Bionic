@@ -2,15 +2,18 @@
 
 **English** · [Français](README.md)
 
-A Bionic-style chat (LM Studio) right inside ComfyUI, with audio input, vision input and a receiver node that takes the prompt and runs the workflow.
+A Bionic-style chat right inside ComfyUI, connected to any local OpenAI-compatible server (LM Studio, Ollama, llama.cpp), with audio input, vision input, attached documents and a receiver node that takes the prompt and runs the workflow.
 
 ## Features
 
-- Floating chat panel connected to the LM Studio local server (text and vision models).
+- Floating chat panel connected to any local OpenAI-compatible server: LM Studio, Ollama, llama.cpp or a custom address.
 - French or English interface, switchable in ⚙ (panel and node).
 - Streaming answers, collapsible reasoning, model picker in the panel.
 - Vision input: 🖼 button, `Ctrl+V` paste or drag and drop images.
+- Documents: ＋ button to attach **PDF**, **DOCX** or text files (TXT, MD, CSV, JSON…), sent to the model as context.
 - Audio input: 🎙 button, microphone recording and local transcription (faster-whisper).
+- Token counter per answer (`1,364 tok`), with the prompt / answer breakdown on hover.
+- ⏹ button to stop the running answer or the workflow it started.
 - **Bionic Chat Prompt** node: receives the chat prompt and outputs it as a `STRING`.
 - `⚡ Run` button: writes the prompt into the node, then runs the workflow, exactly like ComfyUI's Run button.
 - Automatic workflow run as soon as the model finishes answering (on by default, can be turned off in ⚙).
@@ -20,8 +23,12 @@ A Bionic-style chat (LM Studio) right inside ComfyUI, with audio input, vision i
 ## Requirements
 
 - ComfyUI (tested with version 0.45).
-- [LM Studio](https://lmstudio.ai/) with the local server running (Developer tab → *Start server*, `http://127.0.0.1:1234`).
-- At least one chat model loaded or downloaded in LM Studio.
+- A local OpenAI-compatible server with at least one chat model loaded:
+  - **LM Studio**: Developer tab → *Start server*, `http://127.0.0.1:1234/v1`;
+  - **Ollama**: `ollama serve`, `http://127.0.0.1:11434/v1`;
+  - **llama.cpp**: `llama-server -m model.gguf`, `http://127.0.0.1:9931/v1` (current default port; 8080 on older builds, `--port` to change it).
+
+These three addresses are offered as presets in ⚙, and the field stays free-form.
 
 ## Installation
 
@@ -46,19 +53,21 @@ The Whisper `small` model (~480 MB) is downloaded automatically the first time y
 
 ## Usage
 
-1. Open the panel with `💬 Bionic` and pick an LM Studio model.
-2. Type your prompt, attach images or dictate it with the microphone, then send. When the microphone stops, the transcription is sent automatically (if the option is on) and the model's answer is pushed into the workflow.
+1. Open the panel with `💬 Bionic`, pick your server in ⚙, then a model.
+2. Type your prompt, attach images (🖼), documents (＋) or dictate it with the microphone, then send. When the microphone stops, the transcription is sent automatically (if the option is on) and the model's answer is pushed into the workflow.
 3. Add the **Bionic Chat Prompt** node (right click → Add Node → Bionic) and connect its `prompt` output to the `text` input of a CLIP Text Encode.
 4. The answer's prompt is written into the node and the workflow is started automatically when streaming ends. The same send is still available by hand with `⚡ Run` under an answer, or `⚡ Run` in the input bar to send the typed text directly.
 
 If no **Bionic Chat Prompt** node exists in the graph, it is created automatically on the first Run.
+
+The ⏹ button stops the running answer; used while nothing is generating, it interrupts the workflow that is currently running.
 
 ## Settings
 
 The ⚙ button in the panel lets you change:
 
 - the interface language (French or English);
-- the LM Studio server URL;
+- the server address, with LM Studio / Ollama / llama.cpp presets or a custom address;
 - the system prompt;
 - the temperature;
 - automatic workflow run after the answer;
@@ -71,12 +80,15 @@ Settings are saved in `bionic_chat/config.json` inside ComfyUI's user directory.
 ## How it works
 
 - `nodes.py`: the `BionicChatPrompt` node (`STRING` output).
-- `bionic_server.py`: `/bionic_chat/config`, `/bionic_chat/chat` (streaming proxy to LM Studio) and `/bionic_chat/transcribe` (local Whisper) routes.
-- `web/bionic_chat.js` and `web/bionic_chat.css`: chat panel, audio recording, attachments and workflow triggering.
-- Web tools: `web_search` (Bing, no API key, DuckDuckGo fallback) and `open_url` (page reading), executed by the server in an LM Studio tool-calling loop (3 rounds, then a forced text answer). Local and private addresses are rejected.
+- `bionic_server.py`: `/bionic_chat/config`, `/bionic_chat/chat` (streaming proxy to the configured server), `/bionic_chat/transcribe` (local Whisper) and `/bionic_chat/document` (PDF / DOCX / text extraction) routes.
+- `web/bionic_chat.js` and `web/bionic_chat.css`: chat panel, audio recording, attachments, token counter and workflow triggering.
+- Web tools: `web_search` (Bing, no API key, DuckDuckGo fallback) and `open_url` (page reading), executed by the server in a tool-calling loop (3 rounds, then a forced text answer). Local and private addresses are rejected.
+- The token counter reads the server's `usage` field (`stream_options: {include_usage: true}`); when it is missing, an estimate is shown.
 
 ## Limitations
 
 - Transcription happens after recording stops (no real-time word-by-word transcription).
 - Transcription runs on the CPU in `int8`.
 - Conversation history is not kept between two page reloads.
+- PDFs require `pypdf` or `PyPDF2`, DOCX requires `python-docx`: without them those two formats are refused (text files always work). Documents are limited to 3 per message and 60,000 characters each.
+- The token counter depends on the `usage` reported by the server; otherwise it is an estimate (~4 characters per token).
