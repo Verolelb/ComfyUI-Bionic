@@ -13,6 +13,7 @@ const I18N = {
     newChat: "Nouvelle conversation",
     close: "Fermer",
     modelTitle: "Modèle LM Studio",
+    unloadTitle: "Décharger le modèle de la mémoire",
     placeholderIdle: "Écris ton prompt… (Entrée = envoyer, Maj+Entrée = nouvelle ligne)",
     placeholderBusy: "Bionic répond…",
     micTitle: "Entrée audio (Voxtral/Whisper local)",
@@ -75,13 +76,23 @@ const I18N = {
     docPrefix: "[Document : {0}]",
     tokens: "{0} tok",
     tokensTitle: "Contexte : {0} · Réponse : {1}",
+    tokensConversation: "Cumul de la conversation — contexte : {0} · réponses : {1} · {2} demande(s)",
+    tokensEstimateNote: "estimation pour la dernière réponse (le serveur n'a pas renvoyé d'usage)",
     tokensEstimated: "≈ {0} tok",
     tokensEstimatedTitle: "Estimation : le serveur n'a pas renvoyé d'usage.",
+    tokensLive: "≈ {0} tok",
+    tokensLiveTitle: "Génération en cours — estimation.",
+    tokensRounds: "{0} tours",
+    tokensTitleReasoning: "Contexte : {0} · Réponse : {1} · dont raisonnement : {2}",
     visionSuffix: " (vision)",
     noModel: "Aucun modèle LM Studio",
     settingsNotSaved: "Réglages non enregistrés : {0}",
     settingsNotLoaded: "Réglages pas encore chargés.",
     settingsSaved: "Réglages enregistrés",
+    unloading: "Déchargement du modèle…",
+    unloadOk: "Modèle déchargé ({0} : {1})",
+    unloadFailed: "Déchargement impossible : {0}",
+    unloadNoModel: "Aucun modèle chargé à décharger.",
     generationStopped: "Génération arrêtée",
     workflowStopped: "Workflow arrêté",
     stopFailed: "Arrêt impossible : {0}",
@@ -110,6 +121,7 @@ const I18N = {
     newChat: "New conversation",
     close: "Close",
     modelTitle: "LM Studio model",
+    unloadTitle: "Unload the model from memory",
     placeholderIdle: "Write your prompt… (Enter = send, Shift+Enter = new line)",
     placeholderBusy: "Bionic is answering…",
     micTitle: "Audio input (local Whisper)",
@@ -172,13 +184,23 @@ const I18N = {
     docPrefix: "[Document: {0}]",
     tokens: "{0} tok",
     tokensTitle: "Prompt: {0} · Answer: {1}",
+    tokensConversation: "Conversation total — prompt: {0} · answers: {1} · {2} request(s)",
+    tokensEstimateNote: "estimate for the last answer (the server did not report usage)",
     tokensEstimated: "≈ {0} tok",
     tokensEstimatedTitle: "Estimate: the server did not report usage.",
+    tokensLive: "≈ {0} tok",
+    tokensLiveTitle: "Generating — estimate.",
+    tokensRounds: "{0} rounds",
+    tokensTitleReasoning: "Prompt: {0} · Answer: {1} · reasoning: {2}",
     visionSuffix: " (vision)",
     noModel: "No LM Studio model",
     settingsNotSaved: "Settings not saved: {0}",
     settingsNotLoaded: "Settings are not loaded yet.",
     settingsSaved: "Settings saved",
+    unloading: "Unloading the model…",
+    unloadOk: "Model unloaded ({0}: {1})",
+    unloadFailed: "Could not unload: {0}",
+    unloadNoModel: "No loaded model to unload.",
     generationStopped: "Generation stopped",
     workflowStopped: "Workflow stopped",
     stopFailed: "Could not stop: {0}",
@@ -244,6 +266,7 @@ const state = {
   recStart: 0,
   ui: null,
   els: null,
+  tokens: { prompt: 0, completion: 0, requests: 0, estimated: false },
 };
 
 function language() {
@@ -315,6 +338,7 @@ function buildPanel() {
     </header>
     <div class="bionic-model-row">
       <select id="bionic-model" data-i18n-title="modelTitle"></select>
+      <button type="button" class="bionic-icon-btn" id="bionic-unload" data-i18n-title="unloadTitle">⏏</button>
     </div>
     <div id="bionic-messages"></div>
     <div id="bionic-attachments"></div>
@@ -406,6 +430,7 @@ function collectElements() {
     status: byId("bionic-status"),
     input: byId("bionic-input"),
     model: byId("bionic-model"),
+    unload: byId("bionic-unload"),
     settings: byId("bionic-settings"),
     mic: byId("bionic-mic"),
     recTime: byId("bionic-rec-time"),
@@ -569,6 +594,8 @@ function bindEvents() {
     }
     sendMessage();
   });
+
+  els.unload.addEventListener("click", unloadModel);
 
   els.model.addEventListener("change", () => {
     if (!state.config) return;
@@ -760,11 +787,56 @@ function renderModels() {
   if (state.config?.model) select.value = state.config.model;
 }
 
+const BACKEND_LABELS = { lmstudio: "LM Studio", llamacpp: "llama.cpp", ollama: "Ollama" };
+
+async function unloadModel() {
+  if (state.busy || state.els.unload.disabled) return;
+  const model = state.els.model.value || state.config?.model || "";
+  if (!model) {
+    setStatus(t("unloadNoModel"));
+    return;
+  }
+  state.els.unload.disabled = true;
+  setStatus(t("unloading"));
+  try {
+    const response = await api.fetchApi("/bionic_chat/unload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || response.statusText);
+    if (!data.unloaded || !data.unloaded.length) {
+      setStatus(t("unloadNoModel"));
+      return;
+    }
+    setStatus(t("unloadOk", BACKEND_LABELS[data.backend] || data.backend, data.unloaded.join(", ")));
+    await refreshModels();
+  } catch (error) {
+    setStatus(t("unloadFailed", error?.message || error));
+  } finally {
+    state.els.unload.disabled = false;
+  }
+}
+
+async function refreshModels() {
+  try {
+    const response = await api.fetchApi("/bionic_chat/config");
+    if (!response.ok) return;
+    const data = await response.json();
+    state.models = data.models || [];
+    renderModels();
+  } catch {
+    // the list is refreshed on the next successful config load
+  }
+}
+
 function newConversation() {
   stopStreaming();
   state.messages = [];
   state.attachments = [];
   state.documents = [];
+  state.tokens = { prompt: 0, completion: 0, requests: 0, estimated: false };
   updateTokenCounter(null);
   renderAttachments();
   renderMessages();
@@ -953,12 +1025,23 @@ async function sendMessage() {
   renderMessages();
 
   if (!assistant.usage && assistant.content) {
-    const promptChars = toApiMessages().reduce(
-      (sum, message) => sum + (typeof message.content === "string" ? message.content.length : JSON.stringify(message.content).length),
-      0
-    );
-    assistant.estimatedTokens = Math.round((promptChars + assistant.content.length) / 4);
+    const promptTokens = state.messages
+      .filter((message) => message !== assistant)
+      .reduce((sum, message) => sum + estimateTokens(messageText(message)), 0);
+    assistant.estimatedTokens = promptTokens + estimateTokens(assistant.content);
+    assistant.estimatedPrompt = promptTokens;
   }
+  if (assistant.usage) {
+    addTokenTotals(assistant.usage);
+    state.tokens.estimated = false;
+  } else if (assistant.estimatedTokens) {
+    addTokenTotals({
+      prompt_tokens: assistant.estimatedPrompt || 0,
+      completion_tokens: estimateTokens(assistant.content),
+    });
+    state.tokens.estimated = true;
+  }
+  assistant.liveTokens = 0;
   updateTokenCounter(assistant);
 
   if (state.config?.auto_run !== false && !assistant.error && !assistant.aborted && assistant.content.trim()) {
@@ -986,22 +1069,42 @@ function lastAssistantMessage() {
 function updateTokenCounter(assistant) {
   const counter = document.getElementById("bionic-tokens");
   if (!counter) return;
-  const usage = assistant?.usage;
-  if (usage && (usage.total_tokens || usage.prompt_tokens || usage.completion_tokens)) {
-    const prompt = Number(usage.prompt_tokens) || 0;
-    const completion = Number(usage.completion_tokens) || 0;
-    const total = Number(usage.total_tokens) || prompt + completion;
-    counter.textContent = t("tokens", total.toLocaleString());
-    counter.title = t("tokensTitle", prompt.toLocaleString(), completion.toLocaleString());
+  const totals = state.tokens;
+  const live =
+    assistant && !assistant.usage
+      ? estimateTokens((assistant.content || "") + (assistant.reasoning || ""))
+      : 0;
+  const prompt = totals.prompt;
+  const answers = totals.completion + live;
+  if (!prompt && !answers) {
+    counter.textContent = "";
+    counter.title = "";
     return;
   }
-  if (assistant?.estimatedTokens) {
-    counter.textContent = t("tokensEstimated", assistant.estimatedTokens.toLocaleString());
-    counter.title = t("tokensEstimatedTitle");
-    return;
-  }
-  counter.textContent = "";
-  counter.title = "";
+  const total = prompt + answers;
+  counter.textContent = live
+    ? t("tokensLive", total.toLocaleString())
+    : t("tokens", total.toLocaleString());
+  let title = t(
+    "tokensConversation",
+    prompt.toLocaleString(),
+    answers.toLocaleString(),
+    totals.requests + (live ? 1 : 0)
+  );
+  if (totals.estimated) title += ` · ${t("tokensEstimateNote")}`;
+  counter.title = title;
+}
+
+function addTokenTotals(usage) {
+  state.tokens.prompt += Number(usage.prompt_tokens) || 0;
+  state.tokens.completion += Number(usage.completion_tokens) || 0;
+  state.tokens.requests += 1;
+}
+
+function estimateTokens(text) {
+  if (!text) return 0;
+  const wide = (text.match(/[\u2e80-\u9fff\uac00-\ud7af\uff00-\uffef]/g) || []).length;
+  return Math.max(1, Math.round(wide + (text.length - wide) / 3.8));
 }
 
 function stopStreaming() {
@@ -1154,6 +1257,10 @@ function renderStreaming(assistant) {
     state.ui.reasoning = details;
   } else if (state.ui.reasoning) {
     state.ui.reasoning.lastElementChild.textContent = assistant.reasoning;
+  }
+  if (state.busy && !assistant.usage) {
+    assistant.liveTokens = estimateTokens((assistant.content || "") + (assistant.reasoning || ""));
+    updateTokenCounter(assistant);
   }
   scrollToBottom();
   return state.ui;

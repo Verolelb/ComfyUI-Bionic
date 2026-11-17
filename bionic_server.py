@@ -115,6 +115,12 @@ _UI_TEXT = {
         "document_too_large": "Document trop lourd (20 Mo maximum).",
         "document_unsupported": "Format de document non pris en charge (PDF, DOCX ou texte attendu).",
         "document_failed": "Lecture du document impossible : {error}",
+        "unload_no_model": "Aucun modèle chargé à décharger.",
+        "unload_unsupported": (
+            "Ce serveur ne sait pas décharger un modèle "
+            "(LM Studio 0.4+, Ollama, ou llama.cpp en mode routeur)."
+        ),
+        "unload_failed": "Déchargement impossible ({backend}) : {error}",
     },
     "en": {
         "tool_search": "🔎 Web search: {query}",
@@ -135,6 +141,12 @@ _UI_TEXT = {
         "document_too_large": "Document too large (20 MB maximum).",
         "document_unsupported": "Unsupported document format (PDF, DOCX or text expected).",
         "document_failed": "Could not read the document: {error}",
+        "unload_no_model": "No loaded model to unload.",
+        "unload_unsupported": (
+            "This server cannot unload a model "
+            "(LM Studio 0.4+, Ollama, or llama.cpp in router mode)."
+        ),
+        "unload_failed": "Could not unload ({backend}): {error}",
     },
 }
 
@@ -149,6 +161,71 @@ def _ui_text(key, config=None, **values):
 def _api_root(base_url):
     root = base_url.rstrip("/")
     return root[:-3] if root.endswith("/v1") else root
+
+
+async def _request_json(session, method, url, payload=None):
+    async with session.request(method, url, json=payload) as response:
+        text = await response.text()
+        try:
+            data = json.loads(text) if text else None
+        except ValueError:
+            data = None
+        return response.status, data, text
+
+
+async def _unload_model(session, base_url, model, config):
+    """Ask the configured server to free the model, whatever it is.
+
+    Each backend has its own route, so they are probed in turn: LM Studio's
+    native REST API, then the llama.cpp router, then Ollama.
+    """
+    root = _api_root(base_url)
+
+    status, data, _ = await _request_json(session, "GET", root + "/api/v1/models")
+    if status == 200 and isinstance(data, dict):
+        instances = [
+            instance.get("id") or instance.get("instance_id")
+            for entry in (data.get("models") or data.get("data") or [])
+            for instance in entry.get("loaded_instances") or []
+            if isinstance(instance, dict)
+        ]
+        instances = [instance for instance in instances if instance]
+        if not instances:
+            return {"backend": "lmstudio", "unloaded": []}
+        wanted = model.lower()
+        targets = [
+            instance
+            for instance in instances
+            if wanted and (instance.lower() == wanted or wanted in instance.lower() or instance.lower() in wanted)
+        ]
+        if not targets and len(instances) == 1:
+            targets = instances
+        unloaded = []
+        for instance_id in targets:
+            status, data, text = await _request_json(
+                session, "POST", root + "/api/v1/models/unload", {"instance_id": instance_id}
+            )
+            if status != 200:
+                detail = data.get("error") if isinstance(data, dict) else None
+                raise web.HTTPBadGateway(
+                    text=_ui_text("unload_failed", config, backend="LM Studio", error=detail or text)
+                )
+            unloaded.append(instance_id)
+        return {"backend": "lmstudio", "unloaded": unloaded}
+
+    status, data, text = await _request_json(
+        session, "POST", root + "/models/unload", {"model": model}
+    )
+    if status == 200 and not (isinstance(data, dict) and data.get("success") is False):
+        return {"backend": "llamacpp", "unloaded": [model]}
+
+    status, data, _ = await _request_json(
+        session, "POST", root + "/api/generate", {"model": model, "keep_alive": 0}
+    )
+    if status == 200:
+        return {"backend": "ollama", "unloaded": [model]}
+
+    raise web.HTTPBadGateway(text=_ui_text("unload_unsupported", config))
 
 
 async def _fetch_models(session, base_url, config=None):
@@ -431,7 +508,22 @@ async def _write_event(response, payload):
     await response.write(b"data: " + json.dumps(payload, ensure_ascii=False).encode("utf-8") + b"\n\n")
 
 
-async def _stream_round(session, base_url, model, messages, config, tools, response, tool_choice="auto"):
+def _accumulate_usage(totals, usage):
+    """Add one round's usage to the whole request.
+
+    The prompt is taken from the last round (it holds the full context), the
+    completion is summed so tool rounds are not lost.
+    """
+    details = usage.get("completion_tokens_details") or {}
+    totals["prompt_tokens"] = max(totals["prompt_tokens"], int(usage.get("prompt_tokens") or 0))
+    totals["completion_tokens"] += int(usage.get("completion_tokens") or 0)
+    totals["reasoning_tokens"] += int(details.get("reasoning_tokens") or 0)
+    totals["rounds"] += 1
+
+
+async def _stream_round(
+    session, base_url, model, messages, config, tools, response, tool_choice="auto", totals=None
+):
     body = {
         "model": model,
         "messages": messages,
@@ -459,6 +551,7 @@ async def _stream_round(session, base_url, model, messages, config, tools, respo
 
     content_parts = []
     calls = {}
+    round_usage = None
     try:
         async for raw_line in upstream.content:
             line = raw_line.decode("utf-8", "replace").strip()
@@ -473,7 +566,7 @@ async def _stream_round(session, base_url, model, messages, config, tools, respo
                 continue
             usage = chunk.get("usage")
             if isinstance(usage, dict) and usage:
-                await _write_event(response, {"bionic_event": "usage", "usage": usage})
+                round_usage = usage
             choice = (chunk.get("choices") or [{}])[0]
             delta = choice.get("delta") or {}
             piece = delta.get("content")
@@ -495,14 +588,18 @@ async def _stream_round(session, base_url, model, messages, config, tools, respo
                 entry["function"]["arguments"] += function.get("arguments") or ""
     finally:
         upstream.release()
+    if round_usage and totals is not None:
+        _accumulate_usage(totals, round_usage)
     return "".join(content_parts), [calls[key] for key in sorted(calls)]
 
 
-async def _run_agent(session, base_url, model, messages, config, web_enabled, response):
+async def _run_agent(session, base_url, model, messages, config, web_enabled, response, totals=None):
     tools = WEB_TOOLS if web_enabled else None
     seen = set()
     for _ in range(_MAX_TOOL_ROUNDS):
-        content, calls = await _stream_round(session, base_url, model, messages, config, tools, response)
+        content, calls = await _stream_round(
+            session, base_url, model, messages, config, tools, response, totals=totals
+        )
         if not calls:
             return
         messages.append({"role": "assistant", "content": content, "tool_calls": calls})
@@ -525,7 +622,9 @@ async def _run_agent(session, base_url, model, messages, config, web_enabled, re
     messages.append(
         {"role": "user", "content": "Réponds maintenant en texte, sans appeler d'outil."}
     )
-    await _stream_round(session, base_url, model, messages, config, tools, response, tool_choice="none")
+    await _stream_round(
+        session, base_url, model, messages, config, tools, response, tool_choice="none", totals=totals
+    )
 
 
 @routes.get("/bionic_chat/config")
@@ -545,6 +644,32 @@ async def bionic_get_config(request):
 @routes.post("/bionic_chat/config")
 async def bionic_save_config(request):
     return web.json_response({"config": save_config(await request.json())})
+
+
+@routes.post("/bionic_chat/unload")
+async def bionic_unload(request):
+    config = load_config()
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001 - an empty body is fine
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    model = str(payload.get("model") or config.get("model") or "").strip()
+    if not model:
+        return web.json_response({"error": _ui_text("unload_no_model", config)}, status=400)
+    session = ClientSession(timeout=ClientTimeout(total=30))
+    try:
+        result = await _unload_model(session, config["base_url"], model, config)
+    except ClientConnectorError:
+        return web.json_response(
+            {"error": _ui_text("connect_error", config, base_url=config["base_url"])}, status=502
+        )
+    except web.HTTPBadGateway as exc:
+        return web.json_response({"error": exc.text}, status=502)
+    finally:
+        await session.close()
+    return web.json_response(result)
 
 
 @routes.post("/bionic_chat/chat")
@@ -572,8 +697,11 @@ async def bionic_chat(request):
             }
         )
         await response.prepare(request)
+        usage = {"prompt_tokens": 0, "completion_tokens": 0, "reasoning_tokens": 0, "rounds": 0}
         try:
-            await _run_agent(session, base_url, model, conversation, config, web_enabled, response)
+            await _run_agent(session, base_url, model, conversation, config, web_enabled, response, usage)
+            if usage["rounds"]:
+                await _write_event(response, {"bionic_event": "usage", "usage": dict(usage, total_tokens=usage["prompt_tokens"] + usage["completion_tokens"])})
             await response.write(b"data: [DONE]\n\n")
             await response.write_eof()
         except web.HTTPBadGateway as exc:
