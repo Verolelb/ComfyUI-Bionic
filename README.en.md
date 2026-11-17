@@ -2,7 +2,7 @@
 
 **English** · [Français](README.md)
 
-A Bionic-style chat right inside ComfyUI, connected to any local OpenAI-compatible server (LM Studio, Ollama, llama.cpp), with audio input, vision input, attached documents and a receiver node that takes the prompt and runs the workflow.
+A Bionic-style chat right inside ComfyUI, connected to any local OpenAI-compatible server (LM Studio, Ollama, llama.cpp), with audio input, vision input, attached documents, a token counter and a receiver node that takes the prompt and runs the workflow.
 
 ## Features
 
@@ -12,8 +12,9 @@ A Bionic-style chat right inside ComfyUI, connected to any local OpenAI-compatib
 - Vision input: 🖼 button, `Ctrl+V` paste or drag and drop images.
 - Documents: ＋ button to attach **PDF**, **DOCX** or text files (TXT, MD, CSV, JSON…), sent to the model as context.
 - Audio input: 🎙 button, microphone recording and local transcription (faster-whisper).
-- Token counter per answer (`1,364 tok`), with the prompt / answer breakdown on hover.
+- Token counter **cumulative over the whole conversation**, with the prompt / answer breakdown on hover.
 - ⏹ button to stop the running answer or the workflow it started.
+- ⏏ button to **unload the model** from memory, whatever the server (LM Studio, Ollama, llama.cpp).
 - **Bionic Chat Prompt** node: receives the chat prompt and outputs it as a `STRING`.
 - `⚡ Run` button: writes the prompt into the node, then runs the workflow, exactly like ComfyUI's Run button.
 - Automatic workflow run as soon as the model finishes answering (on by default, can be turned off in ⚙).
@@ -62,6 +63,27 @@ If no **Bionic Chat Prompt** node exists in the graph, it is created automatical
 
 The ⏹ button stops the running answer; used while nothing is generating, it interrupts the workflow that is currently running.
 
+The ⏏ button (right of the model picker) frees the memory held by the loaded model.
+
+## Token counter
+
+- The displayed number is the **conversation total**: every prompt sent plus every answer generated, across all requests. It does not restart for each message.
+- While generating it grows as an estimate (`≈ 837 tok`), then settles on the exact total once the server reports its `usage`.
+- The tooltip gives the breakdown: "Conversation total — prompt: 645 · answers: 192 · 3 request(s)". It adds "estimate" when the server reported no `usage`.
+- The ＋ button (new conversation) resets it.
+
+## Unloading the model
+
+The ⏏ button queries the configured server and picks the right method per backend:
+
+| Server | Method used |
+|---|---|
+| LM Studio 0.4+ | `GET /api/v1/models` to find loaded instances, then `POST /api/v1/models/unload` |
+| llama.cpp (router mode) | `POST /models/unload` |
+| Ollama | `POST /api/generate` with `keep_alive: 0` |
+
+The panel shows the backend and the unloaded model, then refreshes the model list. A server exposing none of these routes gets an explicit message (LM Studio 0.4+, Ollama, or llama.cpp in router mode are required).
+
 ## Settings
 
 The ⚙ button in the panel lets you change:
@@ -80,15 +102,17 @@ Settings are saved in `bionic_chat/config.json` inside ComfyUI's user directory.
 ## How it works
 
 - `nodes.py`: the `BionicChatPrompt` node (`STRING` output).
-- `bionic_server.py`: `/bionic_chat/config`, `/bionic_chat/chat` (streaming proxy to the configured server), `/bionic_chat/transcribe` (local Whisper) and `/bionic_chat/document` (PDF / DOCX / text extraction) routes.
-- `web/bionic_chat.js` and `web/bionic_chat.css`: chat panel, audio recording, attachments, token counter and workflow triggering.
+- `bionic_server.py`: `/bionic_chat/config`, `/bionic_chat/chat` (streaming proxy to the configured server), `/bionic_chat/transcribe` (local Whisper), `/bionic_chat/document` (PDF / DOCX / text extraction) and `/bionic_chat/unload` (model freeing) routes.
+- `web/bionic_chat.js` and `web/bionic_chat.css`: chat panel, audio recording, attachments, cumulative counter and workflow triggering.
 - Web tools: `web_search` (Bing, no API key, DuckDuckGo fallback) and `open_url` (page reading), executed by the server in a tool-calling loop (3 rounds, then a forced text answer). Local and private addresses are rejected.
-- The token counter reads the server's `usage` field (`stream_options: {include_usage: true}`); when it is missing, an estimate is shown.
+- The counter reads the server's `usage` field (`stream_options: {include_usage: true}`); the server sums the tokens of every tool round (last round's context plus all answers). Without `usage`, an estimate is used.
 
 ## Limitations
 
 - Transcription happens after recording stops (no real-time word-by-word transcription).
 - Transcription runs on the CPU in `int8`.
-- Conversation history is not kept between two page reloads.
+- Conversation history is not kept between two page reloads (so the counter starts over).
 - PDFs require `pypdf` or `PyPDF2`, DOCX requires `python-docx`: without them those two formats are refused (text files always work). Documents are limited to 3 per message and 60,000 characters each.
-- The token counter depends on the `usage` reported by the server; otherwise it is an estimate (~4 characters per token).
+- The token counter depends on the `usage` reported by the server; otherwise it is an estimate (~3.8 characters per token).
+- Unloading only works when the server exposes it: a `llama-server` started with a single model (no router mode) has no `/models/unload`.
+- Web search goes through Bing (DuckDuckGo fallback) without an API key: results vary with the availability of those engines.

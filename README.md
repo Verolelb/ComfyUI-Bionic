@@ -2,7 +2,7 @@
 
 [English](README.en.md) · **Français**
 
-Un tchat façon Bionic directement dans ComfyUI, branché sur n'importe quel serveur local compatible OpenAI (LM Studio, Ollama, llama.cpp), avec entrée audio, entrée vision, documents joints et une node réceptrice qui reçoit le prompt et lance le workflow.
+Un tchat façon Bionic directement dans ComfyUI, branché sur n'importe quel serveur local compatible OpenAI (LM Studio, Ollama, llama.cpp), avec entrée audio, entrée vision, documents joints, compteur de tokens et une node réceptrice qui reçoit le prompt et lance le workflow.
 
 ## Fonctionnalités
 
@@ -12,8 +12,9 @@ Un tchat façon Bionic directement dans ComfyUI, branché sur n'importe quel ser
 - Entrée vision : bouton 🖼, collage `Ctrl+V` ou glisser-déposer d'images.
 - Documents : bouton ＋ pour joindre des **PDF**, **DOCX** ou fichiers texte (TXT, MD, CSV, JSON…), envoyés au modèle comme contexte.
 - Entrée audio : bouton 🎙, enregistrement du micro et transcription locale (faster-whisper).
-- Compteur de tokens par réponse (`1 364 tok`), avec le détail contexte / réponse au survol.
+- Compteur de tokens **cumulatif** sur toute la conversation, avec le détail contexte / réponses au survol.
 - Bouton ⏹ pour arrêter la réponse en cours ou le workflow lancé.
+- Bouton ⏏ pour **décharger le modèle** de la mémoire, quel que soit le serveur (LM Studio, Ollama, llama.cpp).
 - Node **Bionic Chat Prompt** : reçoit le prompt du chat et le sort en `STRING`.
 - Bouton `⚡ Run` : écrit le prompt dans la node puis lance le workflow, comme le bouton Run de ComfyUI.
 - Lancement automatique du workflow dès que le modèle a terminé sa réponse (actif par défaut, désactivable dans ⚙).
@@ -62,6 +63,27 @@ Si aucune node **Bionic Chat Prompt** n'est présente dans le graphe, elle est c
 
 Le bouton ⏹ coupe la réponse en cours ; utilisé hors génération, il arrête le workflow en train de tourner.
 
+Le bouton ⏏ (à droite du sélecteur de modèle) libère la mémoire occupée par le modèle chargé.
+
+## Compteur de tokens
+
+- Le chiffre affiché est le **cumul de la conversation** : tout le contexte envoyé plus toutes les réponses générées, toutes demandes confondues. Il ne repart pas de zéro à chaque message.
+- Pendant une génération, il progresse en estimation (`≈ 837 tok`), puis se fige sur le total exact quand le serveur annonce son `usage`.
+- L'infobulle donne le détail : « Cumul de la conversation — contexte : 645 · réponses : 192 · 3 demande(s) ». Elle précise « estimation » quand le serveur n'a pas renvoyé d'`usage`.
+- Il est remis à zéro par le bouton ＋ (nouvelle conversation).
+
+## Déchargement du modèle
+
+Le bouton ⏏ interroge le serveur configuré et choisit la bonne méthode selon le backend :
+
+| Serveur | Méthode utilisée |
+|---|---|
+| LM Studio 0.4+ | `GET /api/v1/models` pour trouver les instances chargées, puis `POST /api/v1/models/unload` |
+| llama.cpp (mode routeur) | `POST /models/unload` |
+| Ollama | `POST /api/generate` avec `keep_alive: 0` |
+
+Le panneau affiche le backend et le modèle déchargés, puis rafraîchit la liste des modèles. Un serveur qui n'expose aucune de ces routes reçoit un message explicite (LM Studio 0.4+, Ollama, ou llama.cpp en mode routeur sont nécessaires).
+
 ## Réglages
 
 Le bouton ⚙ du panneau permet de modifier :
@@ -80,15 +102,17 @@ Les réglages sont enregistrés dans `bionic_chat/config.json`, dans le dossier 
 ## Fonctionnement
 
 - `nodes.py` : node `BionicChatPrompt` (sortie `STRING`).
-- `bionic_server.py` : routes `/bionic_chat/config`, `/bionic_chat/chat` (proxy streaming vers le serveur configuré), `/bionic_chat/transcribe` (Whisper local) et `/bionic_chat/document` (lecture PDF / DOCX / texte).
-- `web/bionic_chat.js` et `web/bionic_chat.css` : panneau de chat, enregistrement audio, pièces jointes, compteur de tokens et déclenchement du workflow.
+- `bionic_server.py` : routes `/bionic_chat/config`, `/bionic_chat/chat` (proxy streaming vers le serveur configuré), `/bionic_chat/transcribe` (Whisper local), `/bionic_chat/document` (lecture PDF / DOCX / texte) et `/bionic_chat/unload` (libération du modèle).
+- `web/bionic_chat.js` et `web/bionic_chat.css` : panneau de chat, enregistrement audio, pièces jointes, compteur cumulatif et déclenchement du workflow.
 - Outils web : `web_search` (Bing, sans clé, avec repli DuckDuckGo) et `open_url` (lecture de page), exécutés par le serveur dans une boucle d'appels d'outils (3 tours, puis réponse forcée en texte). Les adresses locales et privées sont refusées.
-- Le compteur de tokens lit le champ `usage` du serveur (`stream_options: {include_usage: true}`) ; s'il est absent, une estimation est affichée.
+- Le compteur lit le champ `usage` du serveur (`stream_options: {include_usage: true}`) ; le serveur additionne les tokens de tous les tours d'outils (contexte du dernier tour + réponses cumulées). Sans `usage`, une estimation est utilisée.
 
 ## Limites
 
 - La transcription est effectuée après l'arrêt de l'enregistrement (pas de transcription mot-à-mot en temps réel).
 - La transcription tourne sur le CPU en `int8`.
-- L'historique de conversation n'est pas conservé entre deux rechargements de la page.
+- L'historique de conversation n'est pas conservé entre deux rechargements de la page (le compteur repart donc de zéro).
 - Les PDF demandent `pypdf` ou `PyPDF2`, les DOCX demandent `python-docx` : sans ces modules, ces deux formats sont refusés (les fichiers texte passent toujours). Les documents sont limités à 3 par message et 60 000 caractères chacun.
-- Le compteur de tokens dépend de l'`usage` renvoyé par le serveur ; sinon il s'agit d'une estimation (~4 caractères par token).
+- Le compteur de tokens dépend de l'`usage` renvoyé par le serveur ; sinon il s'agit d'une estimation (~3,8 caractères par token).
+- Le déchargement n'est possible que si le serveur l'expose : un `llama-server` lancé avec un modèle unique (sans mode routeur) ne propose pas `/models/unload`.
+- La recherche web passe par Bing (repli DuckDuckGo), sans clé d'API : les résultats peuvent varier selon la disponibilité des moteurs.
