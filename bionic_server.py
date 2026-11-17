@@ -110,6 +110,11 @@ _UI_TEXT = {
         "audio_invalid_detail": "Audio invalide : {error}",
         "whisper_missing": "faster-whisper n'est pas installé dans le Python de ComfyUI.",
         "transcribe_failed": "Transcription impossible : {error}",
+        "document_invalid": "Document invalide.",
+        "document_empty": "Document vide.",
+        "document_too_large": "Document trop lourd (20 Mo maximum).",
+        "document_unsupported": "Format de document non pris en charge (PDF, DOCX ou texte attendu).",
+        "document_failed": "Lecture du document impossible : {error}",
     },
     "en": {
         "tool_search": "🔎 Web search: {query}",
@@ -125,6 +130,11 @@ _UI_TEXT = {
         "audio_invalid_detail": "Invalid audio: {error}",
         "whisper_missing": "faster-whisper is not installed in ComfyUI's Python.",
         "transcribe_failed": "Transcription failed: {error}",
+        "document_invalid": "Invalid document.",
+        "document_empty": "Empty document.",
+        "document_too_large": "Document too large (20 MB maximum).",
+        "document_unsupported": "Unsupported document format (PDF, DOCX or text expected).",
+        "document_failed": "Could not read the document: {error}",
     },
 }
 
@@ -603,6 +613,49 @@ def _decode_wav(raw):
     return audio
 
 
+_MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
+_MAX_DOCUMENT_CHARS = 60000
+
+
+def _decode_plain_text(raw):
+    for encoding in ("utf-8", "utf-16", "latin-1"):
+        try:
+            return raw.decode(encoding)
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    return raw.decode("utf-8", "replace")
+
+
+def _pdf_text(raw):
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        try:
+            from PyPDF2 import PdfReader
+        except ImportError:
+            raise RuntimeError("no PDF reader")
+    reader = PdfReader(io.BytesIO(raw))
+    return "\n".join((page.extract_text() or "") for page in reader.pages[:100])
+
+
+def _docx_text(raw):
+    try:
+        from docx import Document
+    except ImportError:
+        raise RuntimeError("no DOCX reader")
+    document = Document(io.BytesIO(raw))
+    return "\n".join(paragraph.text for paragraph in document.paragraphs)
+
+
+def _extract_document_text(raw, name):
+    suffix = os.path.splitext(str(name).lower())[1]
+    if suffix == ".pdf":
+        return _pdf_text(raw)
+    if suffix == ".docx":
+        return _docx_text(raw)
+    return _decode_plain_text(raw)
+
+
 def _get_whisper_model(size):
     with _WHISPER_LOCK:
         model = _WHISPER_MODELS.get(size)
@@ -658,3 +711,32 @@ async def bionic_transcribe(request):
     except Exception as exc:  # noqa: BLE001 - download/model errors must reach the panel
         return web.json_response({"error": _ui_text("transcribe_failed", config, error=str(exc))}, status=500)
     return web.json_response({"text": text})
+
+
+@routes.post("/bionic_chat/document")
+async def bionic_document(request):
+    payload = await request.json()
+    config = load_config()
+    name = str(payload.get("name") or "document")
+    encoded = str(payload.get("data") or "")
+    try:
+        raw = base64.b64decode(encoded.split(",", 1)[-1], validate=False)
+    except ValueError:
+        raise web.HTTPBadRequest(text=_ui_text("document_invalid", config))
+    if not raw:
+        raise web.HTTPBadRequest(text=_ui_text("document_empty", config))
+    if len(raw) > _MAX_DOCUMENT_BYTES:
+        raise web.HTTPBadRequest(text=_ui_text("document_too_large", config))
+
+    try:
+        text = _extract_document_text(raw, name)
+    except RuntimeError:
+        return web.json_response({"error": _ui_text("document_unsupported", config)}, status=415)
+    except Exception as exc:  # noqa: BLE001 - unreadable files must reach the panel
+        return web.json_response({"error": _ui_text("document_failed", config, error=str(exc))}, status=400)
+
+    text = re.sub(r"[ \t]+\n", "\n", text).replace("\x00", "").strip()
+    truncated = len(text) > _MAX_DOCUMENT_CHARS
+    if truncated:
+        text = text[:_MAX_DOCUMENT_CHARS]
+    return web.json_response({"name": name, "text": text, "truncated": truncated})

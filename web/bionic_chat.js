@@ -3,6 +3,7 @@ import { api } from "../../scripts/api.js";
 
 const NODE_TYPE = "BionicChatPrompt";
 const MAX_IMAGES = 6;
+const MAX_DOCUMENTS = 3;
 const MAX_IMAGE_SIDE = 1280;
 
 const I18N = {
@@ -16,6 +17,7 @@ const I18N = {
     placeholderBusy: "Bionic répond…",
     micTitle: "Entrée audio (Voxtral/Whisper local)",
     attachTitle: "Joindre une image",
+    docTitle: "Joindre un document (PDF, TXT, MD…)",
     webOnTitle: "Recherche Internet activée — cliquer pour désactiver",
     webOffTitle: "Recherche Internet désactivée — cliquer pour activer",
     runTitle: "Envoyer le texte dans la node Bionic Chat Prompt et lancer le workflow",
@@ -64,6 +66,11 @@ const I18N = {
       "Décris ta scène, joins une image ou utilise le micro. Le bouton ⚡ Run envoie le prompt dans la node Bionic Chat Prompt et lance le workflow.",
     attachmentAlt: "pièce jointe",
     remove: "Retirer",
+    docTooMany: "{0} documents maximum par message.",
+    docUnreadable: "Document illisible : {0}",
+    docEmpty: "Aucun texte lisible dans {0}.",
+    docTruncated: "Document tronqué : seuls les 60 000 premiers caractères sont envoyés.",
+    docPrefix: "[Document : {0}]",
     visionSuffix: " (vision)",
     noModel: "Aucun modèle LM Studio",
     settingsNotSaved: "Réglages non enregistrés : {0}",
@@ -101,6 +108,7 @@ const I18N = {
     placeholderBusy: "Bionic is answering…",
     micTitle: "Audio input (local Whisper)",
     attachTitle: "Attach an image",
+    docTitle: "Attach a document (PDF, TXT, MD…)",
     webOnTitle: "Web search enabled — click to disable",
     webOffTitle: "Web search disabled — click to enable",
     runTitle: "Send the text into the Bionic Chat Prompt node and run the workflow",
@@ -149,6 +157,11 @@ const I18N = {
       "Describe your scene, attach an image or use the microphone. The ⚡ Run button sends the prompt into the Bionic Chat Prompt node and runs the workflow.",
     attachmentAlt: "attachment",
     remove: "Remove",
+    docTooMany: "{0} documents maximum per message.",
+    docUnreadable: "Unreadable document: {0}",
+    docEmpty: "No readable text in {0}.",
+    docTruncated: "Document truncated: only the first 60,000 characters are sent.",
+    docPrefix: "[Document: {0}]",
     visionSuffix: " (vision)",
     noModel: "No LM Studio model",
     settingsNotSaved: "Settings not saved: {0}",
@@ -201,6 +214,7 @@ const state = {
   models: [],
   messages: [],
   attachments: [],
+  documents: [],
   busy: false,
   abort: null,
   loaded: false,
@@ -293,8 +307,10 @@ function buildPanel() {
       <div class="bionic-tools">
         <button type="button" class="bionic-icon-btn" id="bionic-mic" data-i18n-title="micTitle">🎙</button>
         <button type="button" class="bionic-icon-btn" id="bionic-attach" data-i18n-title="attachTitle">🖼</button>
+        <button type="button" class="bionic-icon-btn" id="bionic-doc" data-i18n-title="docTitle">＋</button>
         <button type="button" class="bionic-icon-btn" id="bionic-web" data-i18n-title="webOffTitle" aria-pressed="false">🌐</button>
         <input type="file" id="bionic-file" accept="image/*" multiple hidden>
+        <input type="file" id="bionic-doc-file" accept=".txt,.md,.markdown,.csv,.json,.log,.xml,.yaml,.yml,.pdf,.docx,text/plain,application/pdf" multiple hidden>
         <span class="bionic-rec-time" id="bionic-rec-time"></span>
         <span class="bionic-spacer"></span>
         <button type="button" class="bionic-btn bionic-stop" id="bionic-stop" data-i18n-title="stopTitle">⏹</button>
@@ -372,6 +388,7 @@ function collectElements() {
     mic: byId("bionic-mic"),
     recTime: byId("bionic-rec-time"),
     file: byId("bionic-file"),
+    docFile: byId("bionic-doc-file"),
     send: byId("bionic-send"),
     uiLanguage: byId("bionic-cfg-ui-lang"),
   };
@@ -397,6 +414,7 @@ function applyLanguage() {
   renderWhisperOptions();
   renderTranscribeLanguageOptions();
   populateModelPlaceholder();
+  if (state.els && (state.attachments.length || state.documents.length)) renderAttachments();
 
   if (state.els) {
     state.els.launcher.title = dict.launcherTitle;
@@ -479,6 +497,11 @@ function bindEvents() {
   els.file.addEventListener("change", () => {
     addImageFiles(els.file.files);
     els.file.value = "";
+  });
+  document.getElementById("bionic-doc").addEventListener("click", () => els.docFile.click());
+  els.docFile.addEventListener("change", () => {
+    addDocumentFiles(els.docFile.files);
+    els.docFile.value = "";
   });
 
   els.mic.addEventListener("click", toggleRecording);
@@ -686,6 +709,7 @@ function newConversation() {
   stopStreaming();
   state.messages = [];
   state.attachments = [];
+  state.documents = [];
   renderAttachments();
   renderMessages();
   state.els.input.value = "";
@@ -709,10 +733,21 @@ function imageStrip(images) {
   return strip;
 }
 
+function documentList(documents) {
+  const list = el("div", "bionic-message-docs");
+  for (const doc of documents) {
+    const chip = el("div", "bionic-doc");
+    chip.appendChild(el("span", null, `📄 ${doc.name}`));
+    list.appendChild(chip);
+  }
+  return list;
+}
+
 function messageElement(message) {
   const wrap = el("div", `bionic-msg ${message.role}${message.error ? " error" : ""}`);
   const bubble = el("div", "bionic-bubble");
   if (message.images && message.images.length) bubble.appendChild(imageStrip(message.images));
+  if (message.documents && message.documents.length) bubble.appendChild(documentList(message.documents));
 
   let reasoning = null;
   if (message.reasoning) {
@@ -786,19 +821,45 @@ function renderAttachments() {
     thumb.append(img, remove);
     box.appendChild(thumb);
   });
+  state.documents.forEach((doc, index) => {
+    const chip = el("div", "bionic-doc");
+    chip.appendChild(el("span", null, `📄 ${doc.name}`));
+    const remove = el("button", null, "×");
+    remove.type = "button";
+    remove.title = t("remove");
+    remove.addEventListener("click", () => {
+      state.documents.splice(index, 1);
+      renderAttachments();
+    });
+    chip.appendChild(remove);
+    box.appendChild(chip);
+  });
+}
+
+function messageText(message) {
+  const documents = message.documents || [];
+  if (!documents.length) return message.content || "";
+  const block = documents.map((doc) => `${t("docPrefix", doc.name)}\n${doc.text}`).join("\n\n");
+  return message.content ? `${message.content}\n\n${block}` : block;
 }
 
 function toApiMessages() {
   return state.messages
-    .filter((message) => message.content || (message.images && message.images.length))
+    .filter(
+      (message) =>
+        message.content ||
+        (message.images && message.images.length) ||
+        (message.documents && message.documents.length)
+    )
     .map((message) => {
+      const text = messageText(message);
       if (!message.images || !message.images.length) {
-        return { role: message.role, content: message.content || "" };
+        return { role: message.role, content: text };
       }
       return {
         role: message.role,
         content: [
-          { type: "text", text: message.content || "" },
+          { type: "text", text },
           ...message.images.map((url) => ({ type: "image_url", image_url: { url } })),
         ],
       };
@@ -808,10 +869,16 @@ function toApiMessages() {
 async function sendMessage() {
   if (state.busy) return;
   const text = state.els.input.value.trim();
-  if (!text && !state.attachments.length) return;
+  if (!text && !state.attachments.length && !state.documents.length) return;
 
-  state.messages.push({ role: "user", content: text, images: state.attachments.slice() });
+  state.messages.push({
+    role: "user",
+    content: text,
+    images: state.attachments.slice(),
+    documents: state.documents.slice(),
+  });
   state.attachments = [];
+  state.documents = [];
   state.els.input.value = "";
   autoGrowInput();
   renderAttachments();
@@ -1076,6 +1143,50 @@ async function addImageFiles(fileList) {
     }
   }
   renderAttachments();
+}
+
+async function addDocumentFiles(fileList) {
+  const files = [...(fileList || [])];
+  for (const file of files) {
+    if (state.documents.length >= MAX_DOCUMENTS) {
+      toast("warning", t("docTooMany", MAX_DOCUMENTS));
+      break;
+    }
+    try {
+      const data = await fileToBase64(file);
+      const response = await api.fetchApi("/bionic_chat/document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, data }),
+      });
+      let payload = {};
+      try {
+        payload = await response.json();
+      } catch {
+        /* empty body */
+      }
+      if (!response.ok) throw new Error(payload.error || response.statusText);
+      const text = (payload.text || "").trim();
+      if (!text) {
+        toast("warning", t("docEmpty", file.name));
+        continue;
+      }
+      state.documents.push({ name: payload.name || file.name, text, truncated: !!payload.truncated });
+      if (payload.truncated) toast("warning", t("docTruncated"));
+    } catch (error) {
+      toast("error", t("docUnreadable", error.message || error));
+    }
+  }
+  renderAttachments();
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(t("readFailed")));
+    reader.onload = () => resolve(base64FromArrayBuffer(reader.result));
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 function handlePaste(event) {

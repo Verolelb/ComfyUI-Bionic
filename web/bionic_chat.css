@@ -187,6 +187,47 @@
   margin-bottom: 6px;
 }
 
+.bionic-message-docs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.bionic-doc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--bionic-border);
+  border-radius: 8px;
+  background: var(--bionic-input);
+  color: var(--bionic-fg);
+  font-size: 11px;
+}
+
+.bionic-doc span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 250px;
+}
+
+.bionic-doc button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--bionic-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bionic-doc button:hover {
+  color: var(--bionic-fg);
+}
+
 .bionic-message-images img {
   width: 96px;
   height: 96px;
