@@ -403,6 +403,13 @@
   cursor: default;
 }
 
+.bionic-tokens {
+  color: var(--bionic-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .bionic-rec-time {
   color: #ff8d8d;
   font-size: 11px;

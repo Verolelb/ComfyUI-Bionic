@@ -438,17 +438,19 @@ async def _stream_round(session, base_url, model, messages, config, tools, respo
         "temperature": float(config["temperature"]),
         "max_tokens": int(config["max_tokens"]),
         "stream": True,
+        "stream_options": {"include_usage": True},
     }
     if tools:
         body["tools"] = tools
         body["tool_choice"] = tool_choice
     url = base_url.rstrip("/") + "/chat/completions"
     upstream = await session.post(url, json=body)
-    if tools and upstream.status in (400, 422):
+    if upstream.status in (400, 422) and (tools or "stream_options" in body):
         await upstream.text()
         upstream.release()
         body.pop("tools", None)
         body.pop("tool_choice", None)
+        body.pop("stream_options", None)
         upstream = await session.post(url, json=body)
     if upstream.status != 200:
         detail = await upstream.text()
@@ -469,6 +471,9 @@ async def _stream_round(session, base_url, model, messages, config, tools, respo
                 chunk = json.loads(data)
             except ValueError:
                 continue
+            usage = chunk.get("usage")
+            if isinstance(usage, dict) and usage:
+                await _write_event(response, {"bionic_event": "usage", "usage": usage})
             choice = (chunk.get("choices") or [{}])[0]
             delta = choice.get("delta") or {}
             piece = delta.get("content")

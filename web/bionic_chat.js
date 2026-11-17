@@ -71,6 +71,10 @@ const I18N = {
     docEmpty: "Aucun texte lisible dans {0}.",
     docTruncated: "Document tronqué : seuls les 60 000 premiers caractères sont envoyés.",
     docPrefix: "[Document : {0}]",
+    tokens: "{0} tok",
+    tokensTitle: "Contexte : {0} · Réponse : {1}",
+    tokensEstimated: "≈ {0} tok",
+    tokensEstimatedTitle: "Estimation : le serveur n'a pas renvoyé d'usage.",
     visionSuffix: " (vision)",
     noModel: "Aucun modèle LM Studio",
     settingsNotSaved: "Réglages non enregistrés : {0}",
@@ -162,6 +166,10 @@ const I18N = {
     docEmpty: "No readable text in {0}.",
     docTruncated: "Document truncated: only the first 60,000 characters are sent.",
     docPrefix: "[Document: {0}]",
+    tokens: "{0} tok",
+    tokensTitle: "Prompt: {0} · Answer: {1}",
+    tokensEstimated: "≈ {0} tok",
+    tokensEstimatedTitle: "Estimate: the server did not report usage.",
     visionSuffix: " (vision)",
     noModel: "No LM Studio model",
     settingsNotSaved: "Settings not saved: {0}",
@@ -312,6 +320,7 @@ function buildPanel() {
         <input type="file" id="bionic-file" accept="image/*" multiple hidden>
         <input type="file" id="bionic-doc-file" accept=".txt,.md,.markdown,.csv,.json,.log,.xml,.yaml,.yml,.pdf,.docx,text/plain,application/pdf" multiple hidden>
         <span class="bionic-rec-time" id="bionic-rec-time"></span>
+        <span class="bionic-tokens" id="bionic-tokens"></span>
         <span class="bionic-spacer"></span>
         <button type="button" class="bionic-btn bionic-stop" id="bionic-stop" data-i18n-title="stopTitle">⏹</button>
         <button type="button" class="bionic-btn bionic-run" id="bionic-run" data-i18n-title="runTitle">⚡ Run</button>
@@ -423,6 +432,7 @@ function applyLanguage() {
   }
 
   updateWebButton();
+  updateTokenCounter(lastAssistantMessage());
   if (state.messages.length && !state.busy) renderMessages();
   applyNodeLanguage();
 }
@@ -710,6 +720,7 @@ function newConversation() {
   state.messages = [];
   state.attachments = [];
   state.documents = [];
+  updateTokenCounter(null);
   renderAttachments();
   renderMessages();
   state.els.input.value = "";
@@ -896,6 +907,15 @@ async function sendMessage() {
   setBusyUi(false);
   renderMessages();
 
+  if (!assistant.usage && assistant.content) {
+    const promptChars = toApiMessages().reduce(
+      (sum, message) => sum + (typeof message.content === "string" ? message.content.length : JSON.stringify(message.content).length),
+      0
+    );
+    assistant.estimatedTokens = Math.round((promptChars + assistant.content.length) / 4);
+  }
+  updateTokenCounter(assistant);
+
   if (state.config?.auto_run !== false && !assistant.error && !assistant.aborted && assistant.content.trim()) {
     await runPrompt(assistant.content);
   }
@@ -909,6 +929,34 @@ function setBusyUi(busy) {
   els.send.classList.toggle("bionic-send", !busy);
   els.mic.disabled = busy;
   els.input.placeholder = busy ? t("placeholderBusy") : t("placeholderIdle");
+}
+
+function lastAssistantMessage() {
+  for (let index = state.messages.length - 1; index >= 0; index -= 1) {
+    if (state.messages[index].role === "assistant") return state.messages[index];
+  }
+  return null;
+}
+
+function updateTokenCounter(assistant) {
+  const counter = document.getElementById("bionic-tokens");
+  if (!counter) return;
+  const usage = assistant?.usage;
+  if (usage && (usage.total_tokens || usage.prompt_tokens || usage.completion_tokens)) {
+    const prompt = Number(usage.prompt_tokens) || 0;
+    const completion = Number(usage.completion_tokens) || 0;
+    const total = Number(usage.total_tokens) || prompt + completion;
+    counter.textContent = t("tokens", total.toLocaleString());
+    counter.title = t("tokensTitle", prompt.toLocaleString(), completion.toLocaleString());
+    return;
+  }
+  if (assistant?.estimatedTokens) {
+    counter.textContent = t("tokensEstimated", assistant.estimatedTokens.toLocaleString());
+    counter.title = t("tokensEstimatedTitle");
+    return;
+  }
+  counter.textContent = "";
+  counter.title = "";
 }
 
 function stopStreaming() {
@@ -1020,6 +1068,11 @@ function handleSseChunk(chunk, assistant) {
     }
     if (parsed.bionic_event === "tool" && parsed.label) {
       setStatus(parsed.label);
+      return false;
+    }
+    if (parsed.bionic_event === "usage" && parsed.usage) {
+      assistant.usage = parsed.usage;
+      updateTokenCounter(assistant);
       return false;
     }
     if (parsed.error) {
