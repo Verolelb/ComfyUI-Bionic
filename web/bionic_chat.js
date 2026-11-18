@@ -5,6 +5,11 @@ const NODE_TYPE = "BionicChatPrompt";
 const MAX_IMAGES = 6;
 const MAX_DOCUMENTS = 3;
 const MAX_IMAGE_SIDE = 1280;
+const SILENCE_MS = 2000;
+const SILENCE_MIN_SPEECH_MS = 500;
+const DEFAULT_SILENCE_DB = -45;
+const METER_FLOOR_DB = -70;
+const METER_CEIL_DB = -10;
 
 const I18N = {
   fr: {
@@ -32,6 +37,12 @@ const I18N = {
     temperature: "Température",
     autoRun: "Lancer automatiquement le workflow après la réponse",
     autoAudio: "Envoyer automatiquement la transcription après le micro",
+    autoStopSilence: "Arrêter l'enregistrement après 2 s de silence",
+    silenceThreshold: "Seuil de silence",
+    silenceThresholdHint:
+      "Le niveau mesuré doit rester sous ce seuil pendant 2 s pour arrêter l'enregistrement. À baisser si le silence n'est jamais détecté, à monter si le bruit de fond coupe trop tôt.",
+    silenceMeterTitle: "Niveau du micro (la barre doit passer au-dessus du trait quand tu parles)",
+    silenceDetected: "Silence détecté — envoi de l'enregistrement",
     autoUnload: "Décharger automatiquement le modèle après chaque réponse",
     web: "Accès Internet (recherche web + ouverture d'URL)",
     whisperModel: "Modèle de transcription audio",
@@ -90,6 +101,9 @@ const I18N = {
     settingsNotSaved: "Réglages non enregistrés : {0}",
     settingsNotLoaded: "Réglages pas encore chargés.",
     settingsSaved: "Réglages enregistrés",
+    restartNeeded:
+      "Redémarre ComfyUI : le serveur n'a pas reconnu {0} (réglage gardé pour cette session seulement).",
+    silenceCountdown: "silence {0}/{1} s",
     unloading: "Déchargement du modèle…",
     unloadOk: "Modèle déchargé ({0} : {1})",
     unloadAuto: "Modèle déchargé automatiquement : {0}",
@@ -142,6 +156,12 @@ const I18N = {
     temperature: "Temperature",
     autoRun: "Run the workflow automatically after the answer",
     autoAudio: "Send the transcription automatically after the microphone",
+    autoStopSilence: "Stop recording after 2 s of silence",
+    silenceThreshold: "Silence threshold",
+    silenceThresholdHint:
+      "The measured level must stay below this threshold for 2 s to stop the recording. Lower it if silence is never detected, raise it if background noise stops it too soon.",
+    silenceMeterTitle: "Microphone level (the bar should rise above the marker while you speak)",
+    silenceDetected: "Silence detected — sending the recording",
     autoUnload: "Unload the model automatically after each answer",
     web: "Internet access (web search + URL opening)",
     whisperModel: "Audio transcription model",
@@ -200,6 +220,9 @@ const I18N = {
     settingsNotSaved: "Settings not saved: {0}",
     settingsNotLoaded: "Settings are not loaded yet.",
     settingsSaved: "Settings saved",
+    restartNeeded:
+      "Restart ComfyUI: the server did not recognise {0} (kept for this session only).",
+    silenceCountdown: "silence {0}/{1} s",
     unloading: "Unloading the model…",
     unloadOk: "Model unloaded ({0}: {1})",
     unloadAuto: "Model unloaded automatically: {0}",
@@ -268,6 +291,8 @@ const state = {
   recChunks: [],
   recTimer: null,
   recStart: 0,
+  recWatch: null,
+  recSilence: 0,
   ui: null,
   els: null,
   tokens: { prompt: 0, completion: 0, requests: 0, estimated: false },
@@ -357,6 +382,10 @@ function buildPanel() {
         <input type="file" id="bionic-file" accept="image/*" multiple hidden>
         <input type="file" id="bionic-doc-file" accept=".txt,.md,.markdown,.csv,.json,.log,.xml,.yaml,.yml,.pdf,.docx,text/plain,application/pdf" multiple hidden>
         <span class="bionic-rec-time" id="bionic-rec-time"></span>
+        <span class="bionic-meter bionic-hidden" id="bionic-meter" data-i18n-title="silenceMeterTitle">
+          <span class="bionic-meter-fill" id="bionic-meter-fill"></span>
+          <span class="bionic-meter-mark bionic-hidden" id="bionic-meter-mark"></span>
+        </span>
         <span class="bionic-tokens" id="bionic-tokens"></span>
         <span class="bionic-spacer"></span>
         <button type="button" class="bionic-btn bionic-stop" id="bionic-stop" data-i18n-title="stopTitle">⏹</button>
@@ -396,6 +425,15 @@ function buildPanel() {
       <label class="bionic-check">
         <input id="bionic-cfg-autoaudio" type="checkbox">
         <span data-i18n="autoAudio">Envoyer automatiquement la transcription après le micro</span>
+      </label>
+      <label class="bionic-check">
+        <input id="bionic-cfg-autostop" type="checkbox">
+        <span data-i18n="autoStopSilence">Arrêter l'enregistrement après 2 s de silence</span>
+      </label>
+      <label>
+        <span data-i18n="silenceThreshold">Seuil de silence</span>
+        <input id="bionic-cfg-silence" type="range" min="-70" max="-15" step="1" data-i18n-title="silenceThresholdHint">
+        <span class="bionic-cfg-hint" id="bionic-cfg-silence-value"></span>
       </label>
       <label class="bionic-check">
         <input id="bionic-cfg-web" type="checkbox">
@@ -442,6 +480,9 @@ function collectElements() {
     settings: byId("bionic-settings"),
     mic: byId("bionic-mic"),
     recTime: byId("bionic-rec-time"),
+    meter: byId("bionic-meter"),
+    meterFill: byId("bionic-meter-fill"),
+    meterMark: byId("bionic-meter-mark"),
     file: byId("bionic-file"),
     docFile: byId("bionic-doc-file"),
     send: byId("bionic-send"),
@@ -574,6 +615,7 @@ function bindEvents() {
     els.settings.classList.add("bionic-hidden");
   });
   document.getElementById("bionic-cfg-save").addEventListener("click", saveSettings);
+  document.getElementById("bionic-cfg-silence").addEventListener("input", syncSilenceThresholdLabel);
   els.uiLanguage.addEventListener("change", changeLanguage);
   els.preset.addEventListener("change", () => {
     if (els.preset.value) document.getElementById("bionic-cfg-url").value = els.preset.value;
@@ -722,6 +764,9 @@ function fillSettings() {
   document.getElementById("bionic-cfg-temp").value = state.config.temperature;
   document.getElementById("bionic-cfg-autorun").checked = state.config.auto_run !== false;
   document.getElementById("bionic-cfg-autoaudio").checked = state.config.auto_send_audio !== false;
+  document.getElementById("bionic-cfg-autostop").checked = state.config.auto_stop_silence === true;
+  document.getElementById("bionic-cfg-silence").value = silenceThresholdDb();
+  syncSilenceThresholdLabel();
   document.getElementById("bionic-cfg-autounload").checked = state.config.auto_unload === true;
   document.getElementById("bionic-cfg-web").checked = state.config.web_enabled !== false;
   document.getElementById("bionic-cfg-ui-lang").value = state.config.language === "en" ? "en" : "fr";
@@ -741,6 +786,8 @@ async function saveSettings() {
     temperature: Number(document.getElementById("bionic-cfg-temp").value),
     auto_run: document.getElementById("bionic-cfg-autorun").checked,
     auto_send_audio: document.getElementById("bionic-cfg-autoaudio").checked,
+    auto_stop_silence: document.getElementById("bionic-cfg-autostop").checked,
+    silence_threshold_db: Number(document.getElementById("bionic-cfg-silence").value),
     auto_unload: document.getElementById("bionic-cfg-autounload").checked,
     web_enabled: document.getElementById("bionic-cfg-web").checked,
     transcribe_model: document.getElementById("bionic-cfg-whisper").value,
@@ -749,7 +796,15 @@ async function saveSettings() {
   if (await saveConfig(patch)) {
     state.els.settings.classList.add("bionic-hidden");
     await loadConfig();
-    toast("success", t("settingsSaved"));
+    // A server started before these settings existed drops them: keep them for this session.
+    const dropped = Object.keys(patch).filter((key) => state.config[key] === undefined);
+    if (dropped.length) {
+      state.config = { ...state.config, ...patch };
+      fillSettings();
+      toast("warning", t("restartNeeded", dropped.join(", ")));
+    } else {
+      toast("success", t("settingsSaved"));
+    }
   }
 }
 
@@ -1449,6 +1504,123 @@ function fileToDataUrl(file) {
   });
 }
 
+function silenceThresholdDb() {
+  const value = Number(state.config?.silence_threshold_db);
+  if (!Number.isFinite(value)) return DEFAULT_SILENCE_DB;
+  return Math.max(METER_FLOOR_DB, Math.min(-15, Math.round(value)));
+}
+
+function dbToPercent(db) {
+  const ratio = (db - METER_FLOOR_DB) / (METER_CEIL_DB - METER_FLOOR_DB);
+  return Math.max(0, Math.min(100, ratio * 100));
+}
+
+function syncSilenceThresholdLabel() {
+  const input = document.getElementById("bionic-cfg-silence");
+  const label = document.getElementById("bionic-cfg-silence-value");
+  if (!input || !label) return;
+  label.textContent = `${Number(input.value)} dB`;
+}
+
+function showMeterLevel(db, thresholdDb, silenceRatio) {
+  const { meter, meterFill, meterMark } = state.els;
+  if (!meter || !meterFill || !meterMark) return;
+  meter.classList.remove("bionic-hidden");
+  meterFill.style.width = `${dbToPercent(db)}%`;
+  meterFill.classList.toggle("bionic-meter-loud", db > thresholdDb);
+  meterMark.style.left = `${dbToPercent(thresholdDb)}%`;
+  meterMark.classList.toggle("bionic-hidden", state.config?.auto_stop_silence !== true);
+  const silenceLeft = silenceRatio > 0 ? ` · ${Math.max(0, SILENCE_MS - Math.round(silenceRatio * SILENCE_MS))} ms` : "";
+  meter.title = `${t("silenceMeterTitle")} — ${db.toFixed(0)} dB / ${t("silenceThreshold")} ${thresholdDb} dB${silenceLeft}`;
+}
+
+function hideMeter() {
+  const { meter, meterFill } = state.els || {};
+  if (!meter) return;
+  meter.classList.add("bionic-hidden");
+  if (meterFill) meterFill.style.width = "0%";
+}
+
+function startSilenceWatch(stream, thresholdDb, onSilence, onLevel) {
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtor) return null;
+  let context;
+  try {
+    context = new AudioCtor({ latencyHint: "interactive" });
+  } catch {
+    try {
+      context = new AudioCtor();
+    } catch {
+      return null;
+    }
+  }
+  context.resume?.().catch(() => {});
+  const source = context.createMediaStreamSource(stream);
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 2048;
+  source.connect(analyser);
+  // A muted path to the destination keeps the graph running in every browser.
+  const sink = context.createGain();
+  sink.gain.value = 0;
+  analyser.connect(sink);
+  sink.connect(context.destination);
+  const buffer = new Float32Array(analyser.fftSize);
+
+  let speechMs = 0;
+  let silenceMs = 0;
+  let last = performance.now();
+
+  const measure = () => {
+    if (analyser.getFloatTimeDomainData) {
+      analyser.getFloatTimeDomainData(buffer);
+      let sum = 0;
+      for (let i = 0; i < buffer.length; i += 1) sum += buffer[i] * buffer[i];
+      return Math.sqrt(sum / buffer.length);
+    }
+    const bytes = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(bytes);
+    let sum = 0;
+    for (let i = 0; i < bytes.length; i += 1) {
+      const value = (bytes[i] - 128) / 128;
+      sum += value * value;
+    }
+    return Math.sqrt(sum / bytes.length);
+  };
+
+  const timer = setInterval(() => {
+    const now = performance.now();
+    const elapsed = Math.min(1000, now - last);
+    last = now;
+    const db = 20 * Math.log10(Math.max(measure(), 1e-6));
+
+    if (db > thresholdDb) {
+      speechMs += elapsed;
+      // Short blips (breath, chair, keyboard) only slow the countdown instead of cancelling it.
+      silenceMs = Math.max(0, silenceMs - elapsed * 3);
+    } else if (speechMs >= SILENCE_MIN_SPEECH_MS) {
+      silenceMs += elapsed;
+    }
+    state.recSilence = silenceMs / SILENCE_MS;
+
+    onLevel?.(db, silenceMs / SILENCE_MS);
+
+    if (onSilence && silenceMs >= SILENCE_MS) {
+      clearInterval(timer);
+      onSilence();
+    }
+  }, 100);
+
+  return {
+    close() {
+      clearInterval(timer);
+      source.disconnect();
+      analyser.disconnect();
+      sink.disconnect();
+      context.close?.().catch(() => {});
+    },
+  };
+}
+
 async function toggleRecording() {
   if (state.recording) {
     state.recorder?.stop();
@@ -1470,12 +1642,15 @@ async function toggleRecording() {
     if (event.data.size) state.recChunks.push(event.data);
   };
   recorder.onstop = async () => {
+    state.recWatch?.close();
+    state.recWatch = null;
     state.recStream?.getTracks().forEach((track) => track.stop());
     state.recStream = null;
     clearInterval(state.recTimer);
     state.recording = false;
     state.els.mic.classList.remove("bionic-active");
     state.els.recTime.textContent = "";
+    hideMeter();
     const blob = new Blob(state.recChunks, { type: recorder.mimeType || "audio/webm" });
     state.recChunks = [];
     if (blob.size > 1200) await transcribeBlob(blob);
@@ -1484,10 +1659,30 @@ async function toggleRecording() {
   recorder.start();
   state.recording = true;
   state.recStart = Date.now();
+  const autoStop = state.config?.auto_stop_silence === true;
+  state.recSilence = 0;
+  const thresholdDb = silenceThresholdDb();
+  state.recWatch = startSilenceWatch(
+    state.recStream,
+    thresholdDb,
+    autoStop
+      ? () => {
+          if (!state.recording) return;
+          setStatus(t("silenceDetected"));
+          recorder.stop();
+        }
+      : null,
+    (db, silenceRatio) => showMeterLevel(db, thresholdDb, silenceRatio),
+  );
   state.els.mic.classList.add("bionic-active");
   state.recTimer = setInterval(() => {
     const seconds = Math.floor((Date.now() - state.recStart) / 1000);
-    state.els.recTime.textContent = `● ${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+    const stamp = `● ${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+    const showCountdown = state.recording && state.config?.auto_stop_silence === true && state.recSilence > 0.05;
+    const countdown = showCountdown
+      ? ` · ${t("silenceCountdown", ((state.recSilence * SILENCE_MS) / 1000).toFixed(1), SILENCE_MS / 1000)}`
+      : "";
+    state.els.recTime.textContent = stamp + countdown;
   }, 200);
   setStatus(t("recordingStatus"));
 }

@@ -420,6 +420,53 @@
   font-variant-numeric: tabular-nums;
 }
 
+.bionic-hidden {
+  display: none !important;
+}
+
+.bionic-meter {
+  position: relative;
+  display: inline-block;
+  width: 64px;
+  height: 7px;
+  flex: none;
+  border: 1px solid var(--bionic-border);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 45%);
+}
+
+.bionic-meter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  border-radius: 999px;
+  background: var(--bionic-accent);
+  transition: width 0.08s linear;
+}
+
+.bionic-meter-fill.bionic-meter-loud {
+  background: #57d38c;
+}
+
+.bionic-meter-mark {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  left: 50%;
+  background: #ff8d8d;
+  box-shadow: 0 0 4px rgb(0 0 0 / 60%);
+}
+
+.bionic-cfg-hint {
+  color: var(--bionic-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 #bionic-panel.bionic-drop::after {
   content: attr(data-drop-label);
   position: absolute;

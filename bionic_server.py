@@ -43,6 +43,8 @@ CONFIG_DEFAULTS = {
     "transcribe_language": "fr",
     "auto_run": True,
     "auto_send_audio": True,
+    "auto_stop_silence": False,
+    "silence_threshold_db": -45,
     "auto_unload": False,
     "web_enabled": False,
     "language": "fr",
@@ -78,6 +80,12 @@ def save_config(patch):
         if key not in patch:
             continue
         value = patch[key]
+        if key == "silence_threshold_db":
+            try:
+                config[key] = max(-70, min(-15, int(round(float(value)))))
+            except (TypeError, ValueError):
+                config[key] = CONFIG_DEFAULTS[key]
+            continue
         if isinstance(default, bool):
             config[key] = bool(value)
         elif isinstance(default, float):
