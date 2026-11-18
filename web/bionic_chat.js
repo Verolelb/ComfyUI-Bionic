@@ -141,6 +141,7 @@ const I18N = {
     systemPrompt: "System prompt",
     temperature: "Temperature",
     autoRun: "Run the workflow automatically after the answer",
+    autoAudio: "Send the transcription automatically after the microphone",
     autoUnload: "Unload the model automatically after each answer",
     web: "Internet access (web search + URL opening)",
     whisperModel: "Audio transcription model",
