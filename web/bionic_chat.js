@@ -105,6 +105,9 @@ const I18N = {
     maxTokensHint: "La réponse est coupée à cette longueur : augmente si le texte est tronqué.",
     resend: "↻ Renvoyer",
     resendHint: "Rejouer cette demande à l'identique",
+    edit: "✎ Éditer",
+    editHint: "Remettre ce message dans la saisie pour le corriger avant de l'envoyer",
+    editLoaded: "Message remis dans la saisie ; les échanges suivants ont été retirés.",
     restartNeeded:
       "Redémarre ComfyUI : le serveur n'a pas reconnu {0} (réglage gardé pour cette session seulement).",
     silenceCountdown: "silence {0}/{1} s",
@@ -228,6 +231,9 @@ const I18N = {
     maxTokensHint: "The answer is cut at that length: raise it when the text is truncated.",
     resend: "↻ Resend",
     resendHint: "Send this exact request again",
+    edit: "✎ Edit",
+    editHint: "Put this message back in the input so you can fix it before sending",
+    editLoaded: "Message moved back into the input; the following exchanges were removed.",
     restartNeeded:
       "Restart ComfyUI: the server did not recognise {0} (kept for this session only).",
     silenceCountdown: "silence {0}/{1} s",
@@ -993,12 +999,19 @@ function messageElement(message) {
     (message.content || (message.images && message.images.length) || (message.documents && message.documents.length))
   ) {
     actions = el("div", "bionic-message-actions");
+    const editButton = el("button", "bionic-link", t("edit"));
+    editButton.type = "button";
+    editButton.title = t("editHint");
+    editButton.addEventListener("click", () => editMessage(message));
     const resendButton = el("button", "bionic-link", t("resend"));
     resendButton.type = "button";
     resendButton.title = t("resendHint");
     resendButton.addEventListener("click", () => resendMessage(message));
-    if (state.busy) resendButton.disabled = true;
-    actions.appendChild(resendButton);
+    if (state.busy) {
+      editButton.disabled = true;
+      resendButton.disabled = true;
+    }
+    actions.append(editButton, resendButton);
     wrap.appendChild(actions);
   }
 
@@ -1100,6 +1113,23 @@ function toApiMessages() {
         ],
       };
     });
+}
+
+function editMessage(message) {
+  if (state.busy) return;
+  const index = state.messages.indexOf(message);
+  if (index === -1) return;
+  state.messages.splice(index);
+  state.attachments = (message.images || []).slice();
+  state.documents = (message.documents || []).slice();
+  state.els.input.value = message.content || "";
+  renderAttachments();
+  renderMessages();
+  autoGrowInput();
+  state.els.input.focus();
+  const end = state.els.input.value.length;
+  if (state.els.input.setSelectionRange) state.els.input.setSelectionRange(end, end);
+  setStatus(t("editLoaded"));
 }
 
 function resendMessage(message) {
