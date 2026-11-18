@@ -43,6 +43,7 @@ CONFIG_DEFAULTS = {
     "transcribe_language": "fr",
     "auto_run": True,
     "auto_send_audio": True,
+    "auto_unload": False,
     "web_enabled": False,
     "language": "fr",
 }
@@ -84,7 +85,8 @@ def save_config(patch):
         elif isinstance(default, int):
             config[key] = max(1, int(value))
         else:
-            config[key] = str(value)[:8000]
+            limit = 30000 if key == "system_prompt" else 8000
+            config[key] = str(value)[:limit]
     if "language" in patch:
         config["language"] = "en" if str(patch["language"]).lower().startswith("en") else "fr"
     config["base_url"] = config["base_url"].rstrip("/")

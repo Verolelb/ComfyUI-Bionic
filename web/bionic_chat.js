@@ -32,6 +32,7 @@ const I18N = {
     temperature: "Température",
     autoRun: "Lancer automatiquement le workflow après la réponse",
     autoAudio: "Envoyer automatiquement la transcription après le micro",
+    autoUnload: "Décharger automatiquement le modèle après chaque réponse",
     web: "Accès Internet (recherche web + ouverture d'URL)",
     whisperModel: "Modèle de transcription audio",
     transcribeLanguage: "Langue de la transcription",
@@ -91,6 +92,7 @@ const I18N = {
     settingsSaved: "Réglages enregistrés",
     unloading: "Déchargement du modèle…",
     unloadOk: "Modèle déchargé ({0} : {1})",
+    unloadAuto: "Modèle déchargé automatiquement : {0}",
     unloadFailed: "Déchargement impossible : {0}",
     unloadNoModel: "Aucun modèle chargé à décharger.",
     generationStopped: "Génération arrêtée",
@@ -139,7 +141,7 @@ const I18N = {
     systemPrompt: "System prompt",
     temperature: "Temperature",
     autoRun: "Run the workflow automatically after the answer",
-    autoAudio: "Send the transcription automatically after the microphone",
+    autoUnload: "Unload the model automatically after each answer",
     web: "Internet access (web search + URL opening)",
     whisperModel: "Audio transcription model",
     transcribeLanguage: "Transcription language",
@@ -199,6 +201,7 @@ const I18N = {
     settingsSaved: "Settings saved",
     unloading: "Unloading the model…",
     unloadOk: "Model unloaded ({0}: {1})",
+    unloadAuto: "Model unloaded automatically: {0}",
     unloadFailed: "Could not unload: {0}",
     unloadNoModel: "No loaded model to unload.",
     generationStopped: "Generation stopped",
@@ -396,6 +399,10 @@ function buildPanel() {
       <label class="bionic-check">
         <input id="bionic-cfg-web" type="checkbox">
         <span data-i18n="web">Accès Internet (recherche web + ouverture d'URL)</span>
+      </label>
+      <label class="bionic-check">
+        <input id="bionic-cfg-autounload" type="checkbox">
+        <span data-i18n="autoUnload">Décharger automatiquement le modèle après chaque réponse</span>
       </label>
       <label>
         <span data-i18n="whisperModel">Modèle de transcription audio</span>
@@ -714,6 +721,7 @@ function fillSettings() {
   document.getElementById("bionic-cfg-temp").value = state.config.temperature;
   document.getElementById("bionic-cfg-autorun").checked = state.config.auto_run !== false;
   document.getElementById("bionic-cfg-autoaudio").checked = state.config.auto_send_audio !== false;
+  document.getElementById("bionic-cfg-autounload").checked = state.config.auto_unload === true;
   document.getElementById("bionic-cfg-web").checked = state.config.web_enabled !== false;
   document.getElementById("bionic-cfg-ui-lang").value = state.config.language === "en" ? "en" : "fr";
   document.getElementById("bionic-cfg-whisper").value = state.config.transcribe_model;
@@ -732,6 +740,7 @@ async function saveSettings() {
     temperature: Number(document.getElementById("bionic-cfg-temp").value),
     auto_run: document.getElementById("bionic-cfg-autorun").checked,
     auto_send_audio: document.getElementById("bionic-cfg-autoaudio").checked,
+    auto_unload: document.getElementById("bionic-cfg-autounload").checked,
     web_enabled: document.getElementById("bionic-cfg-web").checked,
     transcribe_model: document.getElementById("bionic-cfg-whisper").value,
     transcribe_language: document.getElementById("bionic-cfg-language").value,
@@ -789,15 +798,15 @@ function renderModels() {
 
 const BACKEND_LABELS = { lmstudio: "LM Studio", llamacpp: "llama.cpp", ollama: "Ollama" };
 
-async function unloadModel() {
-  if (state.busy || state.els.unload.disabled) return;
+async function unloadModel(options = {}) {
+  if (state.busy || (state.els.unload.disabled && !options.silent)) return;
   const model = state.els.model.value || state.config?.model || "";
   if (!model) {
-    setStatus(t("unloadNoModel"));
+    if (!options.silent) setStatus(t("unloadNoModel"));
     return;
   }
   state.els.unload.disabled = true;
-  setStatus(t("unloading"));
+  if (!options.silent) setStatus(t("unloading"));
   try {
     const response = await api.fetchApi("/bionic_chat/unload", {
       method: "POST",
@@ -807,13 +816,19 @@ async function unloadModel() {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || response.statusText);
     if (!data.unloaded || !data.unloaded.length) {
-      setStatus(t("unloadNoModel"));
+      if (!options.silent) setStatus(t("unloadNoModel"));
       return;
     }
-    setStatus(t("unloadOk", BACKEND_LABELS[data.backend] || data.backend, data.unloaded.join(", ")));
+    if (options.silent) {
+      toast("success", t("unloadAuto", data.unloaded.join(", ")));
+    } else {
+      setStatus(t("unloadOk", BACKEND_LABELS[data.backend] || data.backend, data.unloaded.join(", ")));
+    }
     await refreshModels();
   } catch (error) {
-    setStatus(t("unloadFailed", error?.message || error));
+    const message = error?.message || error;
+    if (options.silent) toast("warning", t("unloadFailed", message));
+    else setStatus(t("unloadFailed", message));
   } finally {
     state.els.unload.disabled = false;
   }
@@ -1048,6 +1063,7 @@ async function sendMessage() {
     await runPrompt(assistant.content);
   }
   if (!assistant.aborted) updateTargetLabel();
+  if (state.config?.auto_unload === true) await unloadModel({ silent: true });
 }
 
 function setBusyUi(busy) {
