@@ -2,34 +2,54 @@
 
 **English** · [Français](README.md)
 
-A Bionic-style chat right inside ComfyUI, connected to any local OpenAI-compatible server (LM Studio, Ollama, llama.cpp), with audio input, vision input, attached documents, a token counter and a receiver node that takes the prompt and runs the workflow.
+A Bionic-style chat right inside ComfyUI: it talks to any local OpenAI-compatible server (LM Studio, Ollama, llama.cpp), accepts text, voice, images and documents, counts the tokens of the whole conversation, and pushes the prompt into a node that runs the workflow.
+
+## Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [The panel](#the-panel)
+- [Audio and silence detection](#audio-and-silence-detection)
+- [Token counter](#token-counter)
+- [Unloading the model](#unloading-the-model)
+- [Settings](#settings)
+- [Node and workflow](#node-and-workflow)
+- [Internet access](#internet-access)
+- [How it works](#how-it-works)
+- [Limitations](#limitations)
+- [Troubleshooting](#troubleshooting)
 
 ## Features
 
 - Floating chat panel connected to any local OpenAI-compatible server: LM Studio, Ollama, llama.cpp or a custom address.
 - French or English interface, switchable in ⚙ (panel and node).
 - Streaming answers, collapsible reasoning, model picker in the panel.
-- Vision input: 🖼 button, `Ctrl+V` paste or drag and drop images.
+- Vision input: 🖼 button, `Ctrl+V` paste or drag and drop, up to 6 images per message, resized to 1280 px on the long side.
 - Documents: ＋ button to attach **PDF**, **DOCX** or text files (TXT, MD, CSV, JSON…), sent to the model as context.
-- Audio input: 🎙 button, microphone recording and local transcription (faster-whisper).
+- Audio input: 🎙 button, microphone recording and local transcription (faster-whisper), with automatic sending of the transcription.
+- Automatic stop of the recording after 2 seconds of silence, with a **microphone level meter** and an **adjustable silence threshold**.
 - Token counter **cumulative over the whole conversation**, with the prompt / answer breakdown on hover.
 - ⏹ button to stop the running answer or the workflow it started.
-- ⏏ button to **unload the model** from memory, whatever the server (LM Studio, Ollama, llama.cpp), with an option to unload it automatically after every answer.
+- ⏏ button to **unload the model** from memory, whatever the server, with an option to unload it automatically after every answer.
 - **Bionic Chat Prompt** node: receives the chat prompt and outputs it as a `STRING`.
 - `⚡ Run` button: writes the prompt into the node, then runs the workflow, exactly like ComfyUI's Run button.
-- Automatic workflow run as soon as the model finishes answering (on by default, can be turned off in ⚙).
-- Automatic sending of the audio transcription when the microphone stops (on by default, can be turned off in ⚙).
-- Internet access: the model can search the web and open pages to answer. Off by default, enabled with the 🌐 button in the panel (or in ⚙).
+- Automatic workflow run as soon as the model finishes answering (on by default, can be turned off).
+- Internet access: the model can search the web and open pages to answer (off by default).
 
 ## Requirements
 
 - ComfyUI (tested with version 0.45).
-- A local OpenAI-compatible server with at least one chat model loaded:
-  - **LM Studio**: Developer tab → *Start server*, `http://127.0.0.1:1234/v1`;
-  - **Ollama**: `ollama serve`, `http://127.0.0.1:11434/v1`;
-  - **llama.cpp**: `llama-server -m model.gguf`, `http://127.0.0.1:9931/v1` (current default port; 8080 on older builds, `--port` to change it).
+- A local OpenAI-compatible server with at least one chat model:
 
-These three addresses are offered as presets in ⚙, and the field stays free-form.
+| Server | Default address | How to start it |
+|---|---|---|
+| LM Studio | `http://127.0.0.1:1234/v1` | Developer tab → *Start server* |
+| Ollama | `http://127.0.0.1:11434/v1` | `ollama serve` |
+| llama.cpp | `http://127.0.0.1:9931/v1` | `llama-server -m model.gguf` (port 8080 on older builds, `--port` to change it) |
+
+These three addresses are offered as presets in ⚙, and the field stays free-form: any server exposing `/chat/completions` works.
 
 ## Installation
 
@@ -48,22 +68,62 @@ Install the transcription dependency into the Python used by ComfyUI:
 pip install -r ComfyUI-Bionic/requirements.txt
 ```
 
-Restart ComfyUI. The `💬 Bionic` button appears in the bottom right corner of the interface.
+Restart ComfyUI: the `💬 Bionic` button appears in the bottom right corner of the interface.
 
-The Whisper `small` model (~480 MB) is downloaded automatically the first time you use the microphone. Model size and language are set in ⚙.
+The Whisper `small` model (~480 MB) is downloaded automatically the first time you use the microphone; model size and language are set in ⚙.
 
-## Usage
+PDF and DOCX support is optional and needs `pypdf` (or `PyPDF2`) and `python-docx`:
 
-1. Open the panel with `💬 Bionic`, pick your server in ⚙, then a model.
-2. Type your prompt, attach images (🖼), documents (＋) or dictate it with the microphone, then send. When the microphone stops, the transcription is sent automatically (if the option is on) and the model's answer is pushed into the workflow.
+```bash
+../../../python_embeded/python.exe -m pip install pypdf python-docx
+```
+
+## Quick start
+
+1. Open the panel with `💬 Bionic`, then ⚙: pick your server (LM Studio / Ollama / llama.cpp) and check the address.
+2. Choose a model in the panel's dropdown.
 3. Add the **Bionic Chat Prompt** node (right click → Add Node → Bionic) and connect its `prompt` output to the `text` input of a CLIP Text Encode.
-4. The answer's prompt is written into the node and the workflow is started automatically when streaming ends. The same send is still available by hand with `⚡ Run` under an answer, or `⚡ Run` in the input bar to send the typed text directly.
+4. Type your prompt, optionally attach images, documents or dictate it, then send: when streaming ends the prompt is written into the node and the workflow is started.
 
 If no **Bionic Chat Prompt** node exists in the graph, it is created automatically on the first Run.
 
-The ⏹ button stops the running answer; used while nothing is generating, it interrupts the workflow that is currently running.
+## The panel
 
-The ⏏ button (right of the model picker) frees the memory held by the loaded model.
+| Control | Purpose |
+|---|---|
+| `💬 Bionic` | opens or closes the panel |
+| `⚙` | settings (server, system prompt, options, transcription) |
+| `＋` | new conversation: clears the history and resets the token counter |
+| `🖼` | attaches one or more images |
+| `＋` in the toolbar | attaches a document (PDF, DOCX, text) |
+| `🎙` | starts or stops the microphone recording |
+| `🌐` | enables or disables the model's Internet access |
+| `⏏` | unloads the model loaded on the server |
+| `⏹` | stops the running answer, or the workflow that is running |
+| `⚡ Run` | sends the text into the node and runs the workflow |
+| `Send` | sends the message to the model |
+
+Any reasoning appears in a collapsible block above the answer, and every answer has a `Copy` button.
+
+## Audio and silence detection
+
+The 🎙 button records the microphone, then the server transcribes the audio locally with faster-whisper (CPU, `int8`). The text is added to the input field; if **Automatic sending of the transcription** is on, the message is sent right away, and the workflow follows when automatic run is on.
+
+**Stop on silence** (off by default): with the option checked, recording stops after **2 seconds of silence**, then transcription, sending and the workflow follow without touching the keyboard.
+
+While recording, a **level meter** appears next to the timer:
+
+- the bar follows the measured level and turns **green** while you speak;
+- a **red marker** shows the silence threshold;
+- the timer shows the countdown, for example `● 00:03 · silence 1.2/2 s`;
+- hovering the meter gives the current level in dB.
+
+The **silence threshold** is set in ⚙ (slider from **-70 dB to -15 dB**, **-45 dB** by default):
+
+- silence is never detected, or the countdown never starts: **lower** the threshold;
+- it cuts while you are speaking, or background noise restarts the countdown: **raise** it.
+
+Detection needs at least 0.5 s of speech before it arms, and a short noise (breath, keyboard) no longer resets the countdown: it only slows it down.
 
 ## Token counter
 
@@ -84,36 +144,78 @@ The ⏏ button queries the configured server and picks the right method per back
 
 The panel shows the backend and the unloaded model, then refreshes the model list. A server exposing none of these routes gets an explicit message (LM Studio 0.4+, Ollama, or llama.cpp in router mode are required).
 
+The **Unload the model automatically after each answer** option does the same without a click, after every answer and after every `⚡ Run`: the GPU goes back to ComfyUI immediately, at the cost of reloading the model on the next message.
+
 ## Settings
 
 The ⚙ button in the panel lets you change:
 
-- the interface language (French or English);
-- the server address, with LM Studio / Ollama / llama.cpp presets or a custom address;
-- the system prompt (up to 128,000 characters);
-- the temperature;
-- automatic workflow run after the answer;
-- automatic sending of the audio transcription after the microphone;
-- automatic unloading of the model after every answer (off by default);
-- Internet access (web search and URL opening), also controlled by the 🌐 button next to the microphone;
-- the audio transcription model and language.
+| Setting | Default | Purpose |
+|---|---|---|
+| Interface language | French | panel and node messages |
+| Preset address | — | LM Studio / Ollama / llama.cpp / custom |
+| Server (OpenAI compatible) | `http://127.0.0.1:1234/v1` | free-form, `/chat/completions` appended when missing |
+| System prompt | Bionic prompt | up to **128,000 characters** |
+| Temperature | `0.8` | model creativity |
+| Run the workflow automatically after the answer | on | queues the Run after streaming |
+| Automatic sending of the audio transcription after the microphone | on | sends the dictated text without a click |
+| Stop recording after 2 s of silence | off | stops the microphone on its own |
+| Silence threshold | `-45 dB` | from `-70 dB` to `-15 dB` |
+| Unload the model automatically after each answer | off | frees GPU memory |
+| Internet access (web search + URL opening) | off | server-side web tools |
+| Audio transcription model | `small` | `tiny`, `base`, `small`, `medium`, `large-v3` |
+| Transcription language | French | French, English, auto-detect, Spanish, German, Italian |
 
-Settings are saved in `bionic_chat/config.json` inside ComfyUI's user directory.
+Settings are saved in `bionic_chat/config.json` inside ComfyUI's user directory. `max_tokens` (4096 by default) and the chosen model are stored there too but are not exposed in the panel.
+
+**After updating the repository, restart ComfyUI**: the Python server has to reload `bionic_server.py` to accept the new settings. Refreshing the page only reloads the interface.
+
+## Node and workflow
+
+- The **Bionic Chat Prompt** node (category `Bionic`) exposes a multiline `prompt` input and a `STRING` output named `prompt`.
+- `⚡ Run` writes the prompt into the node, then queues the workflow like ComfyUI's Run button.
+- With automatic run on, the same happens at the end of streaming, without a click.
+- `⏹` stops the current generation; used while nothing is generating, it interrupts the running workflow.
+
+## Internet access
+
+When 🌐 is on (panel button or ⚙ setting), the server gives the model two tools:
+
+- `web_search`: Bing search without an API key, with a DuckDuckGo fallback;
+- `open_url`: reads the text of a page, to go beyond a snippet.
+
+The server runs the tool-calling loop (3 rounds maximum, then a forced text answer) and sums the tokens of every round. Local and private addresses are rejected, so a model cannot reach the internal network.
 
 ## How it works
 
 - `nodes.py`: the `BionicChatPrompt` node (`STRING` output).
 - `bionic_server.py`: `/bionic_chat/config`, `/bionic_chat/chat` (streaming proxy to the configured server), `/bionic_chat/transcribe` (local Whisper), `/bionic_chat/document` (PDF / DOCX / text extraction) and `/bionic_chat/unload` (model freeing) routes.
-- `web/bionic_chat.js` and `web/bionic_chat.css`: chat panel, audio recording, attachments, cumulative counter and workflow triggering.
-- Web tools: `web_search` (Bing, no API key, DuckDuckGo fallback) and `open_url` (page reading), executed by the server in a tool-calling loop (3 rounds, then a forced text answer). Local and private addresses are rejected.
-- The counter reads the server's `usage` field (`stream_options: {include_usage: true}`); the server sums the tokens of every tool round (last round's context plus all answers). Without `usage`, an estimate is used.
+- `web/bionic_chat.js` and `web/bionic_chat.css`: chat panel, audio recording, level meter and silence detection, attachments, cumulative counter and workflow triggering.
+- The microphone is sent as 16 kHz mono WAV; the server converts the audio back to that format before transcribing.
+- The counter reads the server's `usage` field (`stream_options: {include_usage: true}`); without `usage`, an estimate is used.
 
 ## Limitations
 
-- Transcription happens after recording stops (no real-time word-by-word transcription).
-- Transcription runs on the CPU in `int8`.
+- Transcription starts after recording stops: no real-time word-by-word transcription.
+- Transcription runs on the CPU in `int8`; `small` stays fast, `medium` and `large-v3` are much slower.
+- PDFs require `pypdf` or `PyPDF2`, DOCX requires `python-docx`: without them those formats are refused (text files always work).
+- Documents are limited to 3 per message, 20 MB and 60,000 characters each; audio is limited to 30 MB per recording.
 - Conversation history is not kept between two page reloads (so the counter starts over).
-- PDFs require `pypdf` or `PyPDF2`, DOCX requires `python-docx`: without them those two formats are refused (text files always work). Documents are limited to 3 per message and 60,000 characters each.
 - The token counter depends on the `usage` reported by the server; otherwise it is an estimate (~3.8 characters per token).
 - Unloading only works when the server exposes it: a `llama-server` started with a single model (no router mode) has no `/models/unload`.
 - Web search goes through Bing (DuckDuckGo fallback) without an API key: results vary with the availability of those engines.
+- Silence detection depends on the microphone and the room noise: tune it with the threshold.
+
+## Troubleshooting
+
+| Symptom | What to check |
+|---|---|
+| No model in the list | the local server is not running, or the address/port is wrong |
+| "Server unreachable" | check the port in ⚙: LM Studio 1234, Ollama 11434, llama.cpp 9931 |
+| A new checkbox does not stay checked | restart ComfyUI: the server has not reloaded the new settings yet |
+| Silence is never detected | lower the threshold, and check that the meter bar rises when you speak |
+| Recording cuts in the middle of a sentence | raise the silence threshold |
+| The first recording is slow | the Whisper `small` model is downloading on first use |
+| PDF or DOCX refused | install `pypdf` and `python-docx` |
+| Unloading fails | server without an unload route (llama.cpp outside router mode) |
+| Web search returns nothing | try again later: the queried engines are public and keyless |
