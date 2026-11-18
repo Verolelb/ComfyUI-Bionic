@@ -131,6 +131,11 @@ _UI_TEXT = {
             "(LM Studio 0.4+, Ollama, ou llama.cpp en mode routeur)."
         ),
         "unload_failed": "Déchargement impossible ({backend}) : {error}",
+        "unload_single_model": (
+            "llama.cpp tourne avec un seul modèle (-m) : il n'expose aucune route de déchargement. "
+            "Relance llama-server sans -m, avec --models-dir ou --models-preset (mode routeur) ; "
+            "sinon ajoute --sleep-idle-seconds pour libérer le modèle après inactivité."
+        ),
     },
     "en": {
         "tool_search": "🔎 Web search: {query}",
@@ -157,6 +162,11 @@ _UI_TEXT = {
             "(LM Studio 0.4+, Ollama, or llama.cpp in router mode)."
         ),
         "unload_failed": "Could not unload ({backend}): {error}",
+        "unload_single_model": (
+            "llama.cpp is running a single model (-m): it exposes no unload route. "
+            "Restart llama-server without -m, using --models-dir or --models-preset (router mode); "
+            "otherwise add --sleep-idle-seconds to free the model after idling."
+        ),
     },
 }
 
@@ -181,6 +191,22 @@ async def _request_json(session, method, url, payload=None):
         except ValueError:
             data = None
         return response.status, data, text
+
+
+async def _llamacpp_single_model(session, root):
+    """Tell a llama.cpp server started with ``-m`` from a router.
+
+    In single-model mode the model is the process itself, so llama-server
+    registers no unload route at all: ``/props`` is the only way to recognise
+    it, since the router answers it with 400 (it waits for a model name).
+    """
+    try:
+        status, data, _ = await _request_json(session, "GET", root + "/props")
+    except (ClientConnectorError, asyncio.TimeoutError):
+        return False
+    if status != 200 or not isinstance(data, dict):
+        return False
+    return bool(data.get("model_path") or data.get("model_alias"))
 
 
 async def _unload_model(session, base_url, model, config):
@@ -235,6 +261,8 @@ async def _unload_model(session, base_url, model, config):
     if status == 200:
         return {"backend": "ollama", "unloaded": [model]}
 
+    if await _llamacpp_single_model(session, root):
+        raise web.HTTPBadGateway(text=_ui_text("unload_single_model", config))
     raise web.HTTPBadGateway(text=_ui_text("unload_unsupported", config))
 
 

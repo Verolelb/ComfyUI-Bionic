@@ -30,7 +30,7 @@ Un tchat façon Bionic directement dans ComfyUI : il parle à n'importe quel ser
 - Documents : bouton ＋ pour joindre des **PDF**, **DOCX** ou fichiers texte (TXT, MD, CSV, JSON…), envoyés au modèle comme contexte.
 - Entrée audio : bouton 🎙, enregistrement du micro et transcription locale (faster-whisper), avec envoi automatique de la transcription.
 - Arrêt automatique de l'enregistrement après 2 secondes de silence, avec un **vumètre** du micro et un **seuil de silence réglable**.
-- Bouton `↻ Renvoyer` sous chaque message : rejoue la même demande, avec ses images et ses documents.
+- Boutons `✎ Éditer` et `↻ Renvoyer` sous chaque message : `Éditer` remet la demande (texte, images, documents) dans la saisie et retire les échanges suivants pour la corriger, `Renvoyer` rejoue la demande à l'identique.
 - Compteur de tokens **cumulatif** sur toute la conversation, avec le détail contexte / réponses au survol.
 - Bouton ⏹ pour arrêter la réponse en cours ou le workflow lancé.
 - Bouton ⏏ pour **décharger le modèle** de la mémoire, quel que soit le serveur, avec une option de déchargement automatique après chaque réponse.
@@ -104,7 +104,7 @@ Si aucune node **Bionic Chat Prompt** n'est présente dans le graphe, elle est c
 | `⚡ Run` | envoie le texte dans la node et lance le workflow |
 | `Envoyer` | envoie le message au modèle |
 
-Le raisonnement éventuel s'affiche dans un bloc repliable au-dessus de la réponse, et un bouton `Copier` accompagne chaque réponse. Sous chacun de tes propres messages, le bouton `↻ Renvoyer` rejoue la demande à l'identique, images et documents compris.
+Le raisonnement éventuel s'affiche dans un bloc repliable au-dessus de la réponse, et un bouton `Copier` accompagne chaque réponse. Sous chacun de tes propres messages, `✎ Éditer` recharge la demande dans la saisie — le message est retiré avec tout ce qui le suivait, à toi de corriger puis d'envoyer — et `↻ Renvoyer` rejoue la demande à l'identique, images et documents compris.
 
 ## Audio et détection de silence
 
@@ -140,10 +140,12 @@ Le bouton ⏏ interroge le serveur configuré et choisit la bonne méthode selon
 | Serveur | Méthode utilisée |
 |---|---|
 | LM Studio 0.4+ | `GET /api/v1/models` pour trouver les instances chargées, puis `POST /api/v1/models/unload` |
-| llama.cpp (mode routeur) | `POST /models/unload` |
+| llama.cpp (mode routeur uniquement) | `POST /models/unload` |
 | Ollama | `POST /api/generate` avec `keep_alive: 0` |
 
 Le panneau affiche le backend et le modèle déchargés, puis rafraîchit la liste des modèles. Un serveur qui n'expose aucune de ces routes reçoit un message explicite (LM Studio 0.4+, Ollama, ou llama.cpp en mode routeur sont nécessaires).
+
+Un `llama-server` lancé avec un modèle en `-m` n'a **aucune** route de déchargement : le modèle est le processus lui-même. Bionic reconnaît ce cas (`GET /props` répond alors avec `model_path`) et le dit, au lieu du message générique. Pour retrouver le bouton ⏏, relance-le en mode routeur (sans `-m`, avec `--models-dir <dossier>` ou `--models-preset <fichier.ini>`) ; l'id du modèle devient alors son nom de fichier, à re-sélectionner une fois dans le panneau. Sinon, `--sleep-idle-seconds 600` libère le modèle après inactivité, dans les deux modes.
 
 L'option **Décharger automatiquement le modèle après chaque réponse** fait la même chose sans clic, après chaque réponse du modèle et après chaque `⚡ Run` : le GPU est rendu à ComfyUI tout de suite, au prix d'un rechargement du modèle au message suivant.
 
@@ -206,7 +208,7 @@ Le serveur exécute la boucle d'appels d'outils (3 tours maximum, puis réponse 
 - Documents limités à 3 par message, 20 Mo et 60 000 caractères chacun ; audio limité à 30 Mo par enregistrement.
 - L'historique de conversation n'est pas conservé entre deux rechargements de page (le compteur repart donc de zéro).
 - Le compteur dépend de l'`usage` renvoyé par le serveur ; sinon il s'agit d'une estimation (~3,8 caractères par token).
-- Le déchargement n'est possible que si le serveur l'expose : un `llama-server` lancé avec un modèle unique (sans mode routeur) ne propose pas `/models/unload`.
+- Le déchargement n'est possible que si le serveur l'expose : un `llama-server` lancé avec un modèle unique (`-m`, sans mode routeur) ne propose pas `/models/unload` ; le panneau le signale et indique comment le relancer.
 - La recherche web passe par Bing (repli DuckDuckGo), sans clé d'API : les résultats varient selon la disponibilité des moteurs.
 - La détection de silence dépend du micro et du bruit ambiant : elle se règle au cas par cas avec le seuil.
 
@@ -221,6 +223,6 @@ Le serveur exécute la boucle d'appels d'outils (3 tours maximum, puis réponse 
 | L'enregistrement coupe pendant la phrase | monte le seuil de silence |
 | Le premier enregistrement est long | le modèle Whisper `small` se télécharge à la première utilisation |
 | PDF ou DOCX refusé | installe `pypdf` et `python-docx` |
-| Déchargement impossible | serveur sans route d'unload (llama.cpp hors mode routeur) |
+| Déchargement impossible (llama.cpp) | le serveur tourne avec un seul modèle : relance-le sans `-m`, avec `--models-dir` ou `--models-preset` |
 | La réponse est coupée en plein milieu | augmente **Tokens maximum par réponse** dans ⚙ |
 | Recherche web sans résultat | réessaie plus tard : les moteurs interrogés sont publics et sans clé |

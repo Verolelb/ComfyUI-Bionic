@@ -30,7 +30,7 @@ A Bionic-style chat right inside ComfyUI: it talks to any local OpenAI-compatibl
 - Documents: ＋ button to attach **PDF**, **DOCX** or text files (TXT, MD, CSV, JSON…), sent to the model as context.
 - Audio input: 🎙 button, microphone recording and local transcription (faster-whisper), with automatic sending of the transcription.
 - Automatic stop of the recording after 2 seconds of silence, with a **microphone level meter** and an **adjustable silence threshold**.
-- `↻ Resend` button under every message: replays the same request, with its images and documents.
+- `✎ Edit` and `↻ Resend` buttons under every message: `Edit` puts the request (text, images, documents) back into the input and drops the following exchanges so you can fix it, `Resend` replays the request exactly.
 - Token counter **cumulative over the whole conversation**, with the prompt / answer breakdown on hover.
 - ⏹ button to stop the running answer or the workflow it started.
 - ⏏ button to **unload the model** from memory, whatever the server, with an option to unload it automatically after every answer.
@@ -104,7 +104,7 @@ If no **Bionic Chat Prompt** node exists in the graph, it is created automatical
 | `⚡ Run` | sends the text into the node and runs the workflow |
 | `Send` | sends the message to the model |
 
-Any reasoning appears in a collapsible block above the answer, and every answer has a `Copy` button. Under each of your own messages, the `↻ Resend` button replays the request exactly, images and documents included.
+Any reasoning appears in a collapsible block above the answer, and every answer has a `Copy` button. Under each of your own messages, `✎ Edit` loads the request back into the input — the message and everything after it are removed, so you can fix it and send again — and `↻ Resend` replays the request exactly, images and documents included.
 
 ## Audio and silence detection
 
@@ -140,10 +140,12 @@ The ⏏ button queries the configured server and picks the right method per back
 | Server | Method used |
 |---|---|
 | LM Studio 0.4+ | `GET /api/v1/models` to find loaded instances, then `POST /api/v1/models/unload` |
-| llama.cpp (router mode) | `POST /models/unload` |
+| llama.cpp (router mode only) | `POST /models/unload` |
 | Ollama | `POST /api/generate` with `keep_alive: 0` |
 
 The panel shows the backend and the unloaded model, then refreshes the model list. A server exposing none of these routes gets an explicit message (LM Studio 0.4+, Ollama, or llama.cpp in router mode are required).
+
+A `llama-server` started with a model via `-m` has **no** unload route: the model is the process itself. Bionic detects that case (`GET /props` then answers with `model_path`) and says so instead of the generic message. To get the ⏏ button back, restart it in router mode (no `-m`, with `--models-dir <folder>` or `--models-preset <file.ini>`); the model id then becomes its file name, to be picked once again in the panel. Failing that, `--sleep-idle-seconds 600` frees the model after idling, in both modes.
 
 The **Unload the model automatically after each answer** option does the same without a click, after every answer and after every `⚡ Run`: the GPU goes back to ComfyUI immediately, at the cost of reloading the model on the next message.
 
@@ -206,7 +208,7 @@ The server runs the tool-calling loop (3 rounds maximum, then a forced text answ
 - Documents are limited to 3 per message, 20 MB and 60,000 characters each; audio is limited to 30 MB per recording.
 - Conversation history is not kept between two page reloads (so the counter starts over).
 - The token counter depends on the `usage` reported by the server; otherwise it is an estimate (~3.8 characters per token).
-- Unloading only works when the server exposes it: a `llama-server` started with a single model (no router mode) has no `/models/unload`.
+- Unloading only works when the server exposes it: a `llama-server` started with a single model (`-m`, no router mode) has no `/models/unload`; the panel reports it and says how to restart it.
 - Web search goes through Bing (DuckDuckGo fallback) without an API key: results vary with the availability of those engines.
 - Silence detection depends on the microphone and the room noise: tune it with the threshold.
 
@@ -221,6 +223,6 @@ The server runs the tool-calling loop (3 rounds maximum, then a forced text answ
 | Recording cuts in the middle of a sentence | raise the silence threshold |
 | The first recording is slow | the Whisper `small` model is downloading on first use |
 | PDF or DOCX refused | install `pypdf` and `python-docx` |
-| Unloading fails | server without an unload route (llama.cpp outside router mode) |
+| Unloading fails (llama.cpp) | the server runs a single model: restart it without `-m`, with `--models-dir` or `--models-preset` |
 | The answer is cut off mid-sentence | raise **Maximum tokens per answer** in ⚙ |
 | Web search returns nothing | try again later: the queried engines are public and keyless |
