@@ -37,7 +37,7 @@ CONFIG_DEFAULTS = {
     "base_url": "http://127.0.0.1:1234/v1",
     "model": "",
     "temperature": 0.8,
-    "max_tokens": 4096,
+    "max_tokens": 8192,
     "system_prompt": DEFAULT_SYSTEM_PROMPT,
     "transcribe_model": "small",
     "transcribe_language": "fr",
@@ -91,7 +91,7 @@ def save_config(patch):
         elif isinstance(default, float):
             config[key] = max(0.0, min(2.0, float(value)))
         elif isinstance(default, int):
-            config[key] = max(1, int(value))
+            config[key] = max(256 if key == "max_tokens" else 1, min(32768, int(value)))
         else:
             limit = 128000 if key == "system_prompt" else 8000
             config[key] = str(value)[:limit]

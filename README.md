@@ -30,6 +30,7 @@ Un tchat façon Bionic directement dans ComfyUI : il parle à n'importe quel ser
 - Documents : bouton ＋ pour joindre des **PDF**, **DOCX** ou fichiers texte (TXT, MD, CSV, JSON…), envoyés au modèle comme contexte.
 - Entrée audio : bouton 🎙, enregistrement du micro et transcription locale (faster-whisper), avec envoi automatique de la transcription.
 - Arrêt automatique de l'enregistrement après 2 secondes de silence, avec un **vumètre** du micro et un **seuil de silence réglable**.
+- Bouton `↻ Renvoyer` sous chaque message : rejoue la même demande, avec ses images et ses documents.
 - Compteur de tokens **cumulatif** sur toute la conversation, avec le détail contexte / réponses au survol.
 - Bouton ⏹ pour arrêter la réponse en cours ou le workflow lancé.
 - Bouton ⏏ pour **décharger le modèle** de la mémoire, quel que soit le serveur, avec une option de déchargement automatique après chaque réponse.
@@ -103,7 +104,7 @@ Si aucune node **Bionic Chat Prompt** n'est présente dans le graphe, elle est c
 | `⚡ Run` | envoie le texte dans la node et lance le workflow |
 | `Envoyer` | envoie le message au modèle |
 
-Le raisonnement éventuel s'affiche dans un bloc repliable au-dessus de la réponse, et un bouton `Copier` accompagne chaque réponse.
+Le raisonnement éventuel s'affiche dans un bloc repliable au-dessus de la réponse, et un bouton `Copier` accompagne chaque réponse. Sous chacun de tes propres messages, le bouton `↻ Renvoyer` rejoue la demande à l'identique, images et documents compris.
 
 ## Audio et détection de silence
 
@@ -157,6 +158,7 @@ Le bouton ⚙ du panneau permet de modifier :
 | Serveur (OpenAI compatible) | `http://127.0.0.1:1234/v1` | adresse libre, `/chat/completions` ajouté si besoin |
 | Prompt système | prompt Bionic | jusqu'à **128 000 caractères** |
 | Température | `0.8` | créativité du modèle |
+| Tokens maximum par réponse | `8192` | longueur maximale d'une réponse, de 256 à 32768 |
 | Lancer automatiquement le workflow après la réponse | activé | enchaîne le Run après le streaming |
 | Envoi automatique de la transcription après le micro | activé | envoie le texte dicté sans clic |
 | Arrêter l'enregistrement après 2 s de silence | désactivé | coupe le micro tout seul |
@@ -166,7 +168,9 @@ Le bouton ⚙ du panneau permet de modifier :
 | Modèle de transcription audio | `small` | `tiny`, `base`, `small`, `medium`, `large-v3` |
 | Langue de la transcription | français | français, anglais, détection auto, espagnol, allemand, italien |
 
-Les réglages sont enregistrés dans `bionic_chat/config.json`, dans le dossier `user` de ComfyUI. `max_tokens` (4096 par défaut) et le modèle choisi y sont également stockés mais ne sont pas exposés dans le panneau.
+Les réglages sont enregistrés dans `bionic_chat/config.json`, dans le dossier `user` de ComfyUI. Le modèle choisi y est également stocké, mais il se sélectionne dans la liste du panneau.
+
+Une valeur déjà enregistrée n'est jamais écrasée : venant d'une version antérieure, le champ des tokens peut encore afficher `4096`, c'est à toi de le relever. Une valeur supérieure à la fenêtre de contexte du modèle fait répondre une erreur au serveur.
 
 **Après une mise à jour du dépôt, redémarre ComfyUI** : le serveur Python doit relire `bionic_server.py` pour accepter les nouveaux réglages. Un simple rafraîchissement de page ne suffit que pour l'interface.
 
@@ -218,4 +222,5 @@ Le serveur exécute la boucle d'appels d'outils (3 tours maximum, puis réponse 
 | Le premier enregistrement est long | le modèle Whisper `small` se télécharge à la première utilisation |
 | PDF ou DOCX refusé | installe `pypdf` et `python-docx` |
 | Déchargement impossible | serveur sans route d'unload (llama.cpp hors mode routeur) |
+| La réponse est coupée en plein milieu | augmente **Tokens maximum par réponse** dans ⚙ |
 | Recherche web sans résultat | réessaie plus tard : les moteurs interrogés sont publics et sans clé |

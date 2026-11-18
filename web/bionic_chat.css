@@ -256,6 +256,11 @@
   cursor: pointer;
 }
 
+.bionic-link:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .bionic-link:hover {
   color: var(--bionic-fg);
   border-color: var(--bionic-accent);

@@ -101,6 +101,10 @@ const I18N = {
     settingsNotSaved: "Réglages non enregistrés : {0}",
     settingsNotLoaded: "Réglages pas encore chargés.",
     settingsSaved: "Réglages enregistrés",
+    maxTokens: "Tokens maximum par réponse",
+    maxTokensHint: "La réponse est coupée à cette longueur : augmente si le texte est tronqué.",
+    resend: "↻ Renvoyer",
+    resendHint: "Rejouer cette demande à l'identique",
     restartNeeded:
       "Redémarre ComfyUI : le serveur n'a pas reconnu {0} (réglage gardé pour cette session seulement).",
     silenceCountdown: "silence {0}/{1} s",
@@ -220,6 +224,10 @@ const I18N = {
     settingsNotSaved: "Settings not saved: {0}",
     settingsNotLoaded: "Settings are not loaded yet.",
     settingsSaved: "Settings saved",
+    maxTokens: "Maximum tokens per answer",
+    maxTokensHint: "The answer is cut at that length: raise it when the text is truncated.",
+    resend: "↻ Resend",
+    resendHint: "Send this exact request again",
     restartNeeded:
       "Restart ComfyUI: the server did not recognise {0} (kept for this session only).",
     silenceCountdown: "silence {0}/{1} s",
@@ -417,6 +425,11 @@ function buildPanel() {
       <label>
         <span data-i18n="temperature">Température</span>
         <input id="bionic-cfg-temp" type="number" min="0" max="2" step="0.05">
+      </label>
+      <label>
+        <span data-i18n="maxTokens">Tokens maximum par réponse</span>
+        <input id="bionic-cfg-maxtok" type="number" min="256" max="32768" step="256">
+        <span class="bionic-cfg-hint" data-i18n="maxTokensHint">La réponse est coupée à cette longueur.</span>
       </label>
       <label class="bionic-check">
         <input id="bionic-cfg-autorun" type="checkbox">
@@ -756,12 +769,21 @@ async function saveConfig(patch) {
   }
 }
 
+const DEFAULT_MAX_TOKENS = 8192;
+
+function maxTokensValue() {
+  const value = Number(state.config?.max_tokens);
+  if (!Number.isFinite(value) || value <= 0) return DEFAULT_MAX_TOKENS;
+  return Math.max(256, Math.min(32768, Math.round(value)));
+}
+
 function fillSettings() {
   if (!state.config || !document.getElementById("bionic-cfg-url")) return;
   document.getElementById("bionic-cfg-url").value = state.config.base_url || "";
   syncPresetSelect();
   document.getElementById("bionic-cfg-system").value = state.config.system_prompt || "";
   document.getElementById("bionic-cfg-temp").value = state.config.temperature;
+  document.getElementById("bionic-cfg-maxtok").value = maxTokensValue();
   document.getElementById("bionic-cfg-autorun").checked = state.config.auto_run !== false;
   document.getElementById("bionic-cfg-autoaudio").checked = state.config.auto_send_audio !== false;
   document.getElementById("bionic-cfg-autostop").checked = state.config.auto_stop_silence === true;
@@ -784,6 +806,7 @@ async function saveSettings() {
     base_url: document.getElementById("bionic-cfg-url").value.trim(),
     system_prompt: document.getElementById("bionic-cfg-system").value,
     temperature: Number(document.getElementById("bionic-cfg-temp").value),
+    max_tokens: Math.max(256, Math.min(32768, Math.round(Number(document.getElementById("bionic-cfg-maxtok").value) || DEFAULT_MAX_TOKENS))),
     auto_run: document.getElementById("bionic-cfg-autorun").checked,
     auto_send_audio: document.getElementById("bionic-cfg-autoaudio").checked,
     auto_stop_silence: document.getElementById("bionic-cfg-autostop").checked,
@@ -965,6 +988,20 @@ function messageElement(message) {
   wrap.appendChild(bubble);
 
   let actions = null;
+  if (
+    message.role === "user" &&
+    (message.content || (message.images && message.images.length) || (message.documents && message.documents.length))
+  ) {
+    actions = el("div", "bionic-message-actions");
+    const resendButton = el("button", "bionic-link", t("resend"));
+    resendButton.type = "button";
+    resendButton.title = t("resendHint");
+    resendButton.addEventListener("click", () => resendMessage(message));
+    if (state.busy) resendButton.disabled = true;
+    actions.appendChild(resendButton);
+    wrap.appendChild(actions);
+  }
+
   if (message.role === "assistant" && message.content) {
     actions = el("div", "bionic-message-actions");
     const runButton = el("button", "bionic-link", "⚡ Run");
@@ -1063,6 +1100,16 @@ function toApiMessages() {
         ],
       };
     });
+}
+
+function resendMessage(message) {
+  if (state.busy) return;
+  state.attachments = (message.images || []).slice();
+  state.documents = (message.documents || []).slice();
+  state.els.input.value = message.content || "";
+  renderAttachments();
+  autoGrowInput();
+  sendMessage();
 }
 
 async function sendMessage() {

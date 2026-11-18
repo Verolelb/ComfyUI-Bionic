@@ -30,6 +30,7 @@ A Bionic-style chat right inside ComfyUI: it talks to any local OpenAI-compatibl
 - Documents: ＋ button to attach **PDF**, **DOCX** or text files (TXT, MD, CSV, JSON…), sent to the model as context.
 - Audio input: 🎙 button, microphone recording and local transcription (faster-whisper), with automatic sending of the transcription.
 - Automatic stop of the recording after 2 seconds of silence, with a **microphone level meter** and an **adjustable silence threshold**.
+- `↻ Resend` button under every message: replays the same request, with its images and documents.
 - Token counter **cumulative over the whole conversation**, with the prompt / answer breakdown on hover.
 - ⏹ button to stop the running answer or the workflow it started.
 - ⏏ button to **unload the model** from memory, whatever the server, with an option to unload it automatically after every answer.
@@ -103,7 +104,7 @@ If no **Bionic Chat Prompt** node exists in the graph, it is created automatical
 | `⚡ Run` | sends the text into the node and runs the workflow |
 | `Send` | sends the message to the model |
 
-Any reasoning appears in a collapsible block above the answer, and every answer has a `Copy` button.
+Any reasoning appears in a collapsible block above the answer, and every answer has a `Copy` button. Under each of your own messages, the `↻ Resend` button replays the request exactly, images and documents included.
 
 ## Audio and silence detection
 
@@ -157,6 +158,7 @@ The ⚙ button in the panel lets you change:
 | Server (OpenAI compatible) | `http://127.0.0.1:1234/v1` | free-form, `/chat/completions` appended when missing |
 | System prompt | Bionic prompt | up to **128,000 characters** |
 | Temperature | `0.8` | model creativity |
+| Maximum tokens per answer | `8192` | longest answer allowed, from 256 to 32768 |
 | Run the workflow automatically after the answer | on | queues the Run after streaming |
 | Automatic sending of the audio transcription after the microphone | on | sends the dictated text without a click |
 | Stop recording after 2 s of silence | off | stops the microphone on its own |
@@ -166,7 +168,9 @@ The ⚙ button in the panel lets you change:
 | Audio transcription model | `small` | `tiny`, `base`, `small`, `medium`, `large-v3` |
 | Transcription language | French | French, English, auto-detect, Spanish, German, Italian |
 
-Settings are saved in `bionic_chat/config.json` inside ComfyUI's user directory. `max_tokens` (4096 by default) and the chosen model are stored there too but are not exposed in the panel.
+Settings are saved in `bionic_chat/config.json` inside ComfyUI's user directory. The chosen model is stored there too, but it is picked from the panel's list.
+
+A value that is already saved is never overwritten: coming from an earlier version, the token field may still show `4096`, and raising it is up to you. A value above the model's context window makes the server return an error.
 
 **After updating the repository, restart ComfyUI**: the Python server has to reload `bionic_server.py` to accept the new settings. Refreshing the page only reloads the interface.
 
@@ -218,4 +222,5 @@ The server runs the tool-calling loop (3 rounds maximum, then a forced text answ
 | The first recording is slow | the Whisper `small` model is downloading on first use |
 | PDF or DOCX refused | install `pypdf` and `python-docx` |
 | Unloading fails | server without an unload route (llama.cpp outside router mode) |
+| The answer is cut off mid-sentence | raise **Maximum tokens per answer** in ⚙ |
 | Web search returns nothing | try again later: the queried engines are public and keyless |
