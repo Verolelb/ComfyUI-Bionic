@@ -90,7 +90,7 @@ The ⚙ button in the panel lets you change:
 
 - the interface language (French or English);
 - the server address, with LM Studio / Ollama / llama.cpp presets or a custom address;
-- the system prompt (up to 30,000 characters);
+- the system prompt (up to 128,000 characters);
 - the temperature;
 - automatic workflow run after the answer;
 - automatic sending of the audio transcription after the microphone;

@@ -90,7 +90,7 @@ Le bouton ⚙ du panneau permet de modifier :
 
 - la langue de l'interface (français ou anglais) ;
 - l'adresse du serveur, avec préréglages LM Studio / Ollama / llama.cpp ou adresse personnalisée ;
-- le prompt système (jusqu'à 30 000 caractères) ;
+- le prompt système (jusqu'à 128 000 caractères) ;
 - la température ;
 - le lancement automatique du workflow après la réponse ;
 - l'envoi automatique de la transcription audio après le micro ;

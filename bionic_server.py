@@ -85,7 +85,7 @@ def save_config(patch):
         elif isinstance(default, int):
             config[key] = max(1, int(value))
         else:
-            limit = 30000 if key == "system_prompt" else 8000
+            limit = 128000 if key == "system_prompt" else 8000
             config[key] = str(value)[:limit]
     if "language" in patch:
         config["language"] = "en" if str(patch["language"]).lower().startswith("en") else "fr"
