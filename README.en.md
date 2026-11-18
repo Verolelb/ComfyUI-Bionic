@@ -14,7 +14,7 @@ A Bionic-style chat right inside ComfyUI, connected to any local OpenAI-compatib
 - Audio input: 🎙 button, microphone recording and local transcription (faster-whisper).
 - Token counter **cumulative over the whole conversation**, with the prompt / answer breakdown on hover.
 - ⏹ button to stop the running answer or the workflow it started.
-- ⏏ button to **unload the model** from memory, whatever the server (LM Studio, Ollama, llama.cpp).
+- ⏏ button to **unload the model** from memory, whatever the server (LM Studio, Ollama, llama.cpp), with an option to unload it automatically after every answer.
 - **Bionic Chat Prompt** node: receives the chat prompt and outputs it as a `STRING`.
 - `⚡ Run` button: writes the prompt into the node, then runs the workflow, exactly like ComfyUI's Run button.
 - Automatic workflow run as soon as the model finishes answering (on by default, can be turned off in ⚙).
@@ -90,10 +90,11 @@ The ⚙ button in the panel lets you change:
 
 - the interface language (French or English);
 - the server address, with LM Studio / Ollama / llama.cpp presets or a custom address;
-- the system prompt;
+- the system prompt (up to 30,000 characters);
 - the temperature;
 - automatic workflow run after the answer;
 - automatic sending of the audio transcription after the microphone;
+- automatic unloading of the model after every answer (off by default);
 - Internet access (web search and URL opening), also controlled by the 🌐 button next to the microphone;
 - the audio transcription model and language.
 
