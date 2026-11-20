@@ -172,6 +172,8 @@ The ⚙ button in the panel lets you change:
 
 Settings are saved in `bionic_chat/config.json` inside ComfyUI's user directory. The chosen model is stored there too, but it is picked from the panel's list.
 
+A system prompt can be kept under a name: type the name next to the field, click 💾, then pick it in the list just below to load it (`Load`) or delete it (🗑). Those named prompts live in `bionic_chat/prompts.json`.
+
 A value that is already saved is never overwritten: coming from an earlier version, the token field may still show `4096`, and raising it is up to you. A value above the model's context window makes the server return an error.
 
 **After updating the repository, restart ComfyUI**: the Python server has to reload `bionic_server.py` to accept the new settings. Refreshing the page only reloads the interface.
@@ -195,7 +197,7 @@ The server runs the tool-calling loop (3 rounds maximum, then a forced text answ
 ## How it works
 
 - `nodes.py`: the `BionicChatPrompt` node (`STRING` output).
-- `bionic_server.py`: `/bionic_chat/config`, `/bionic_chat/chat` (streaming proxy to the configured server), `/bionic_chat/transcribe` (local Whisper), `/bionic_chat/document` (PDF / DOCX / text extraction) and `/bionic_chat/unload` (model freeing) routes.
+- `bionic_server.py`: `/bionic_chat/config`, `/bionic_chat/prompts` (named system prompts), `/bionic_chat/chat` (streaming proxy to the configured server), `/bionic_chat/transcribe` (local Whisper), `/bionic_chat/document` (PDF / DOCX / text extraction) and `/bionic_chat/unload` (model freeing) routes.
 - `web/bionic_chat.js` and `web/bionic_chat.css`: chat panel, audio recording, level meter and silence detection, attachments, cumulative counter and workflow triggering.
 - The microphone is sent as 16 kHz mono WAV; the server converts the audio back to that format before transcribing.
 - The counter reads the server's `usage` field (`stream_options: {include_usage: true}`); without `usage`, an estimate is used.

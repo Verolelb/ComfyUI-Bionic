@@ -105,6 +105,38 @@ def save_config(patch):
     return config
 
 
+_SYSTEM_PROMPT_LIMIT = 128000
+_PROMPT_NAME_LIMIT = 60
+
+
+def _prompts_path():
+    return os.path.join(folder_paths.get_user_directory(), "bionic_chat", "prompts.json")
+
+
+def load_prompts():
+    """Named system prompts kept next to the config file."""
+    try:
+        with open(_prompts_path(), "r", encoding="utf-8") as handle:
+            saved = json.load(handle)
+    except (FileNotFoundError, ValueError):
+        return {}
+    if not isinstance(saved, dict):
+        return {}
+    prompts = {}
+    for name, text in saved.items():
+        name = str(name).strip()[:_PROMPT_NAME_LIMIT]
+        if name:
+            prompts[name] = str(text)[:_SYSTEM_PROMPT_LIMIT]
+    return prompts
+
+
+def save_prompts(prompts):
+    path = _prompts_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(prompts, handle, ensure_ascii=False, indent=2)
+
+
 _UI_TEXT = {
     "fr": {
         "tool_search": "🔎 Recherche web : {query}",
@@ -136,6 +168,7 @@ _UI_TEXT = {
             "Relance llama-server sans -m, avec --models-dir ou --models-preset (mode routeur) ; "
             "sinon ajoute --sleep-idle-seconds pour libérer le modèle après inactivité."
         ),
+        "prompt_name_missing": "Donne un nom au prompt pour l'enregistrer.",
     },
     "en": {
         "tool_search": "🔎 Web search: {query}",
@@ -167,6 +200,7 @@ _UI_TEXT = {
             "Restart llama-server without -m, using --models-dir or --models-preset (router mode); "
             "otherwise add --sleep-idle-seconds to free the model after idling."
         ),
+        "prompt_name_missing": "Give the prompt a name to save it.",
     },
 }
 
@@ -682,6 +716,33 @@ async def bionic_get_config(request):
 @routes.post("/bionic_chat/config")
 async def bionic_save_config(request):
     return web.json_response({"config": save_config(await request.json())})
+
+
+@routes.get("/bionic_chat/prompts")
+async def bionic_get_prompts(request):
+    return web.json_response({"prompts": load_prompts()})
+
+
+@routes.post("/bionic_chat/prompts")
+async def bionic_save_prompt(request):
+    """Save a named system prompt, or delete it when ``action`` says so."""
+    config = load_config()
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001 - reported as a missing name below
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    name = str(payload.get("name") or "").strip()[:_PROMPT_NAME_LIMIT]
+    if not name:
+        return web.json_response({"error": _ui_text("prompt_name_missing", config)}, status=400)
+    prompts = load_prompts()
+    if str(payload.get("action") or "save") == "delete":
+        prompts.pop(name, None)
+    else:
+        prompts[name] = str(payload.get("text") or "")[:_SYSTEM_PROMPT_LIMIT]
+    save_prompts(prompts)
+    return web.json_response({"prompts": prompts})
 
 
 @routes.post("/bionic_chat/unload")

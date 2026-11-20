@@ -108,6 +108,18 @@ const I18N = {
     edit: "✎ Éditer",
     editHint: "Remettre ce message dans la saisie pour le corriger avant de l'envoyer",
     editLoaded: "Message remis dans la saisie ; les échanges suivants ont été retirés.",
+    promptNamePlaceholder: "Nom du prompt",
+    promptSaveTitle: "Enregistrer le prompt système sous ce nom",
+    promptLoad: "Charger",
+    promptLoadTitle: "Charger ce prompt dans le champ ci-dessus",
+    promptDeleteTitle: "Supprimer ce prompt enregistré",
+    promptNameRequired: "Donne un nom au prompt pour l'enregistrer.",
+    promptSaved: "Prompt enregistré : {0}",
+    promptDeleted: "Prompt supprimé : {0}",
+    promptDeleteConfirm: "Supprimer le prompt « {0} » ?",
+    promptLoaded: "Prompt « {0} » chargé — clique Enregistrer pour l'appliquer.",
+    promptFailed: "Opération impossible : {0}",
+    promptsEmpty: "Aucun prompt enregistré",
     restartNeeded:
       "Redémarre ComfyUI : le serveur n'a pas reconnu {0} (réglage gardé pour cette session seulement).",
     silenceCountdown: "silence {0}/{1} s",
@@ -234,6 +246,18 @@ const I18N = {
     edit: "✎ Edit",
     editHint: "Put this message back in the input so you can fix it before sending",
     editLoaded: "Message moved back into the input; the following exchanges were removed.",
+    promptNamePlaceholder: "Prompt name",
+    promptSaveTitle: "Save the system prompt under this name",
+    promptLoad: "Load",
+    promptLoadTitle: "Load this prompt into the field above",
+    promptDeleteTitle: "Delete this saved prompt",
+    promptNameRequired: "Give the prompt a name to save it.",
+    promptSaved: "Prompt saved: {0}",
+    promptDeleted: "Prompt deleted: {0}",
+    promptDeleteConfirm: "Delete the prompt “{0}”?",
+    promptLoaded: "Prompt “{0}” loaded — click Save to apply it.",
+    promptFailed: "Could not complete: {0}",
+    promptsEmpty: "No saved prompt",
     restartNeeded:
       "Restart ComfyUI: the server did not recognise {0} (kept for this session only).",
     silenceCountdown: "silence {0}/{1} s",
@@ -428,6 +452,13 @@ function buildPanel() {
         <span data-i18n="systemPrompt">Prompt système</span>
         <textarea id="bionic-cfg-system" spellcheck="false"></textarea>
       </label>
+      <div class="bionic-prompt-tools">
+        <input id="bionic-cfg-prompt-name" type="text" spellcheck="false" data-i18n-title="promptNamePlaceholder">
+        <button type="button" class="bionic-btn" id="bionic-prompt-save" data-i18n-title="promptSaveTitle">💾</button>
+        <select id="bionic-cfg-prompt-list"></select>
+        <button type="button" class="bionic-btn" id="bionic-prompt-load" data-i18n="promptLoad" data-i18n-title="promptLoadTitle">Charger</button>
+        <button type="button" class="bionic-btn" id="bionic-prompt-delete" data-i18n-title="promptDeleteTitle">🗑</button>
+      </div>
       <label>
         <span data-i18n="temperature">Température</span>
         <input id="bionic-cfg-temp" type="number" min="0" max="2" step="0.05">
@@ -533,6 +564,10 @@ function applyLanguage() {
   populateModelPlaceholder();
   if (state.els && (state.attachments.length || state.documents.length)) renderAttachments();
 
+  const promptName = document.getElementById("bionic-cfg-prompt-name");
+  if (promptName) promptName.placeholder = dict.promptNamePlaceholder;
+  renderPromptOptions();
+
   if (state.els) {
     state.els.launcher.title = dict.launcherTitle;
     state.els.input.placeholder = state.busy ? dict.placeholderBusy : dict.placeholderIdle;
@@ -634,6 +669,12 @@ function bindEvents() {
     els.settings.classList.add("bionic-hidden");
   });
   document.getElementById("bionic-cfg-save").addEventListener("click", saveSettings);
+  document.getElementById("bionic-prompt-save").addEventListener("click", savePrompt);
+  document.getElementById("bionic-prompt-load").addEventListener("click", applyPrompt);
+  document.getElementById("bionic-prompt-delete").addEventListener("click", deletePrompt);
+  document.getElementById("bionic-cfg-prompt-list").addEventListener("change", (event) => {
+    document.getElementById("bionic-cfg-prompt-name").value = event.target.value || "";
+  });
   document.getElementById("bionic-cfg-silence").addEventListener("input", syncSilenceThresholdLabel);
   els.uiLanguage.addEventListener("change", changeLanguage);
   els.preset.addEventListener("change", () => {
@@ -710,6 +751,7 @@ function closePanel() {
 function openSettings() {
   state.els.settings.classList.remove("bionic-hidden");
   fillSettings();
+  loadPrompts();
 }
 
 function autoGrowInput() {
@@ -800,6 +842,99 @@ function fillSettings() {
   document.getElementById("bionic-cfg-ui-lang").value = state.config.language === "en" ? "en" : "fr";
   document.getElementById("bionic-cfg-whisper").value = state.config.transcribe_model;
   document.getElementById("bionic-cfg-language").value = state.config.transcribe_language;
+}
+
+function renderPromptOptions() {
+  const select = document.getElementById("bionic-cfg-prompt-list");
+  if (!select) return;
+  const prompts = state.prompts || {};
+  const previous = select.value;
+  const names = Object.keys(prompts).sort((a, b) => a.localeCompare(b));
+  select.innerHTML = "";
+  if (!names.length) {
+    const option = el("option", null, t("promptsEmpty"));
+    option.value = "";
+    select.appendChild(option);
+    select.disabled = true;
+    return;
+  }
+  select.disabled = false;
+  for (const name of names) {
+    const option = el("option", null, name);
+    option.value = name;
+    select.appendChild(option);
+  }
+  select.value = names.includes(previous) ? previous : names[0];
+}
+
+async function loadPrompts() {
+  try {
+    const response = await api.fetchApi("/bionic_chat/prompts");
+    if (!response.ok) throw new Error(await response.text());
+    const data = await response.json();
+    state.prompts = data.prompts || {};
+  } catch {
+    state.prompts = state.prompts || {};
+  }
+  renderPromptOptions();
+}
+
+async function savePrompt() {
+  const nameInput = document.getElementById("bionic-cfg-prompt-name");
+  const name = nameInput.value.trim();
+  if (!name) {
+    toast("warning", t("promptNameRequired"));
+    nameInput.focus();
+    return;
+  }
+  const text = document.getElementById("bionic-cfg-system").value;
+  try {
+    const response = await api.fetchApi("/bionic_chat/prompts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, text }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const data = await response.json();
+    state.prompts = data.prompts || {};
+    renderPromptOptions();
+    document.getElementById("bionic-cfg-prompt-list").value = name;
+    toast("success", t("promptSaved", name));
+  } catch (error) {
+    toast("error", t("promptFailed", error.message || error));
+  }
+}
+
+function applyPrompt() {
+  const select = document.getElementById("bionic-cfg-prompt-list");
+  const name = select ? select.value : "";
+  const prompts = state.prompts || {};
+  if (!name || prompts[name] === undefined) return;
+  document.getElementById("bionic-cfg-system").value = prompts[name];
+  document.getElementById("bionic-cfg-prompt-name").value = name;
+  toast("success", t("promptLoaded", name));
+}
+
+async function deletePrompt() {
+  const select = document.getElementById("bionic-cfg-prompt-list");
+  const name = select ? select.value : "";
+  const prompts = state.prompts || {};
+  if (!name || prompts[name] === undefined) return;
+  if (!window.confirm(t("promptDeleteConfirm", name))) return;
+  try {
+    const response = await api.fetchApi("/bionic_chat/prompts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", name }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const data = await response.json();
+    state.prompts = data.prompts || {};
+    renderPromptOptions();
+    toast("success", t("promptDeleted", name));
+  } catch (error) {
+    toast("error", t("promptFailed", error.message || error));
+  }
 }
 
 async function saveSettings() {

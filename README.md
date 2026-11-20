@@ -172,6 +172,8 @@ Le bouton ⚙ du panneau permet de modifier :
 
 Les réglages sont enregistrés dans `bionic_chat/config.json`, dans le dossier `user` de ComfyUI. Le modèle choisi y est également stocké, mais il se sélectionne dans la liste du panneau.
 
+Le prompt système se garde sous un nom : saisis le nom à côté du champ, clique 💾, puis retrouve-le dans la liste juste en dessous pour le recharger (`Charger`) ou le supprimer (🗑). Ces prompts nommés sont conservés dans `bionic_chat/prompts.json`.
+
 Une valeur déjà enregistrée n'est jamais écrasée : venant d'une version antérieure, le champ des tokens peut encore afficher `4096`, c'est à toi de le relever. Une valeur supérieure à la fenêtre de contexte du modèle fait répondre une erreur au serveur.
 
 **Après une mise à jour du dépôt, redémarre ComfyUI** : le serveur Python doit relire `bionic_server.py` pour accepter les nouveaux réglages. Un simple rafraîchissement de page ne suffit que pour l'interface.
@@ -195,7 +197,7 @@ Le serveur exécute la boucle d'appels d'outils (3 tours maximum, puis réponse 
 ## Fonctionnement
 
 - `nodes.py` : node `BionicChatPrompt` (sortie `STRING`).
-- `bionic_server.py` : routes `/bionic_chat/config`, `/bionic_chat/chat` (proxy streaming vers le serveur configuré), `/bionic_chat/transcribe` (Whisper local), `/bionic_chat/document` (lecture PDF / DOCX / texte) et `/bionic_chat/unload` (libération du modèle).
+- `bionic_server.py` : routes `/bionic_chat/config`, `/bionic_chat/prompts` (prompts système nommés), `/bionic_chat/chat` (proxy streaming vers le serveur configuré), `/bionic_chat/transcribe` (Whisper local), `/bionic_chat/document` (lecture PDF / DOCX / texte) et `/bionic_chat/unload` (libération du modèle).
 - `web/bionic_chat.js` et `web/bionic_chat.css` : panneau de chat, enregistrement audio, vumètre et détection de silence, pièces jointes, compteur cumulatif et déclenchement du workflow.
 - Le micro est envoyé en WAV mono 16 kHz ; le serveur ramène l'audio à ce format avant la transcription.
 - Le compteur lit le champ `usage` du serveur (`stream_options: {include_usage: true}`) ; sans `usage`, une estimation est utilisée.

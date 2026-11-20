@@ -488,6 +488,23 @@
   pointer-events: none;
 }
 
+.bionic-prompt-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 2px;
+}
+
+.bionic-prompt-tools input {
+  flex: 1 1 80px;
+  min-width: 60px;
+}
+
+.bionic-prompt-tools select {
+  flex: 1 1 100px;
+  min-width: 80px;
+}
+
 #bionic-settings {
   position: absolute;
   inset: 0;
