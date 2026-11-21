@@ -30,7 +30,7 @@ Un tchat façon Bionic directement dans ComfyUI : il parle à n'importe quel ser
 - Documents : bouton ＋ pour joindre des **PDF**, **DOCX** ou fichiers texte (TXT, MD, CSV, JSON…), envoyés au modèle comme contexte.
 - Entrée audio : bouton 🎙, enregistrement du micro et transcription locale (faster-whisper), avec envoi automatique de la transcription.
 - Arrêt automatique de l'enregistrement après 2 secondes de silence, avec un **vumètre** du micro et un **seuil de silence réglable**.
-- Boutons `✎ Éditer` et `↻ Renvoyer` sous chaque message : `Éditer` remet la demande (texte, images, documents) dans la saisie et retire les échanges suivants pour la corriger, `Renvoyer` rejoue la demande à l'identique.
+- Boutons `⧉ Copier`, `✎ Éditer` et `↻ Renvoyer` sous chaque message : `Copier` met la demande complète (texte, images et documents joints) dans le presse-papiers pour la recoller telle quelle, `Éditer` remet la demande (texte, images, documents) dans la saisie et retire les échanges suivants pour la corriger, `Renvoyer` rejoue la demande à l'identique.
 - Compteur de tokens **cumulatif** sur toute la conversation, avec le détail contexte / réponses au survol.
 - Bouton ⏹ pour arrêter la réponse en cours ou le workflow lancé.
 - Bouton ⏏ pour **décharger le modèle** de la mémoire, quel que soit le serveur, avec une option de déchargement automatique après chaque réponse.
@@ -104,7 +104,7 @@ Si aucune node **Bionic Chat Prompt** n'est présente dans le graphe, elle est c
 | `⚡ Run` | envoie le texte dans la node et lance le workflow |
 | `Envoyer` | envoie le message au modèle |
 
-Le raisonnement éventuel s'affiche dans un bloc repliable au-dessus de la réponse, et un bouton `Copier` accompagne chaque réponse. Sous chacun de tes propres messages, `✎ Éditer` recharge la demande dans la saisie — le message est retiré avec tout ce qui le suivait, à toi de corriger puis d'envoyer — et `↻ Renvoyer` rejoue la demande à l'identique, images et documents compris.
+Le raisonnement éventuel s'affiche dans un bloc repliable au-dessus de la réponse, et un bouton `Copier` accompagne chaque réponse. Sous chacun de tes propres messages, `✎ Éditer` recharge la demande dans la saisie — le message est retiré avec tout ce qui le suivait, à toi de corriger puis d'envoyer — et `↻ Renvoyer` rejoue la demande à l'identique, images et documents compris. Le bouton `⧉ Copier`, placé à côté de `✎ Éditer`, copie la demande entière — texte, images et documents — : recollée dans la saisie avec `Ctrl+V`, elle revient à l'identique ; collée dans un autre logiciel, elle donne le texte et le contenu des documents.
 
 ## Audio et détection de silence
 

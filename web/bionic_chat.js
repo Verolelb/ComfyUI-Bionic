@@ -108,6 +108,10 @@ const I18N = {
     edit: "✎ Éditer",
     editHint: "Remettre ce message dans la saisie pour le corriger avant de l'envoyer",
     editLoaded: "Message remis dans la saisie ; les échanges suivants ont été retirés.",
+    copyRequest: "⧉ Copier",
+    copyRequestHint: "Copier la demande complète (texte, images et documents) pour la recoller telle quelle",
+    copyRequestFailed: "Copie impossible : {0}",
+    pasteRequestAdded: "Demande collée dans la saisie (texte, images et documents).",
     promptNamePlaceholder: "Nom du prompt",
     promptSaveTitle: "Enregistrer le prompt système sous ce nom",
     promptLoad: "Charger",
@@ -246,6 +250,10 @@ const I18N = {
     edit: "✎ Edit",
     editHint: "Put this message back in the input so you can fix it before sending",
     editLoaded: "Message moved back into the input; the following exchanges were removed.",
+    copyRequest: "⧉ Copy",
+    copyRequestHint: "Copy the full request (text, images and documents) so you can paste it back unchanged",
+    copyRequestFailed: "Could not copy: {0}",
+    pasteRequestAdded: "Request pasted into the input (text, images and documents).",
     promptNamePlaceholder: "Prompt name",
     promptSaveTitle: "Save the system prompt under this name",
     promptLoad: "Load",
@@ -1134,6 +1142,10 @@ function messageElement(message) {
     (message.content || (message.images && message.images.length) || (message.documents && message.documents.length))
   ) {
     actions = el("div", "bionic-message-actions");
+    const copyRequestButton = el("button", "bionic-link", t("copyRequest"));
+    copyRequestButton.type = "button";
+    copyRequestButton.title = t("copyRequestHint");
+    copyRequestButton.addEventListener("click", () => copyRequest(message, copyRequestButton));
     const editButton = el("button", "bionic-link", t("edit"));
     editButton.type = "button";
     editButton.title = t("editHint");
@@ -1146,7 +1158,7 @@ function messageElement(message) {
       editButton.disabled = true;
       resendButton.disabled = true;
     }
-    actions.append(editButton, resendButton);
+    actions.append(copyRequestButton, editButton, resendButton);
     wrap.appendChild(actions);
   }
 
@@ -1248,6 +1260,107 @@ function toApiMessages() {
         ],
       };
     });
+}
+
+function escapeClipboardHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function requestClipboardHtml(message) {
+  const parts = ['<div data-bionic-request="1">'];
+  if (message.content) {
+    parts.push(`<div data-bionic-text="1">${escapeClipboardHtml(message.content)}</div>`);
+  }
+  for (const url of message.images || []) {
+    parts.push(`<img data-bionic-image="1" alt="" src="${escapeClipboardHtml(url)}">`);
+  }
+  for (const doc of message.documents || []) {
+    parts.push(
+      `<div data-bionic-doc="1" data-bionic-name="${escapeClipboardHtml(doc.name)}">${escapeClipboardHtml(doc.text)}</div>`
+    );
+  }
+  parts.push("</div>");
+  return parts.join("");
+}
+
+async function writeRequestClipboard(html, plain) {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+    throw new Error("clipboard write unavailable");
+  }
+  await navigator.clipboard.write([
+    new ClipboardItem({
+      "text/plain": new Blob([plain], { type: "text/plain" }),
+      "text/html": new Blob([html], { type: "text/html" }),
+    }),
+  ]);
+}
+
+async function copyRequest(message, button) {
+  const plain = messageText(message);
+  const html = requestClipboardHtml(message);
+  const label = t("copyRequest");
+  try {
+    await writeRequestClipboard(html, plain);
+  } catch (error) {
+    try {
+      await navigator.clipboard.writeText(plain);
+    } catch {
+      toast("error", t("copyRequestFailed", error?.message || error));
+      return;
+    }
+  }
+  button.textContent = t("copied");
+  setStatus(t("copied"));
+  setTimeout(() => (button.textContent = label), 1200);
+}
+
+function requestFromClipboard(dataTransfer) {
+  const html = dataTransfer?.getData ? dataTransfer.getData("text/html") : "";
+  if (!html) return null;
+  let root = null;
+  try {
+    root = new DOMParser()
+      .parseFromString(html, "text/html")
+      .querySelector("[data-bionic-request]");
+  } catch {
+    return null;
+  }
+  if (!root) return null;
+  const textNode = root.querySelector("[data-bionic-text]");
+  const images = [...root.querySelectorAll("[data-bionic-image]")]
+    .map((node) => node.getAttribute("src") || "")
+    .filter((src) => src.startsWith("data:image/"));
+  const documents = [...root.querySelectorAll("[data-bionic-doc]")]
+    .map((node) => ({
+      name: node.getAttribute("data-bionic-name") || "document",
+      text: node.textContent || "",
+    }))
+    .filter((doc) => doc.text.trim());
+  return { text: textNode ? textNode.textContent || "" : "", images, documents };
+}
+
+function insertRequest(request) {
+  const imagesRoom = Math.max(0, MAX_IMAGES - state.attachments.length);
+  const docsRoom = Math.max(0, MAX_DOCUMENTS - state.documents.length);
+  if (request.images.length > imagesRoom) toast("warning", t("maxImages", MAX_IMAGES));
+  if (request.documents.length > docsRoom) toast("warning", t("docTooMany", MAX_DOCUMENTS));
+  state.attachments.push(...request.images.slice(0, imagesRoom));
+  state.documents.push(...request.documents.slice(0, docsRoom));
+  const input = state.els.input;
+  if (request.text) {
+    const existing = input.value.replace(/\s+$/, "");
+    input.value = existing ? `${existing}\n${request.text}` : request.text;
+  }
+  renderAttachments();
+  autoGrowInput();
+  input.focus();
+  const end = input.value.length;
+  if (input.setSelectionRange) input.setSelectionRange(end, end);
+  setStatus(t("pasteRequestAdded"));
 }
 
 function editMessage(message) {
@@ -1679,6 +1792,12 @@ function fileToBase64(file) {
 }
 
 function handlePaste(event) {
+  const request = requestFromClipboard(event.clipboardData);
+  if (request) {
+    event.preventDefault();
+    insertRequest(request);
+    return;
+  }
   const items = event.clipboardData?.items;
   if (!items) return;
   const files = [];
