@@ -1,0 +1,19 @@
+[project]
+name = "bionic"
+version = "1.0.0"
+description = "A chat panel inside ComfyUI: write a request, attach images and documents, then send it to a local llama.cpp server or any OpenAI-compatible endpoint."
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+dynamic = ["dependencies"]
+classifiers = ["Operating System :: OS Independent"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[project.urls]
+Repository = "https://github.com/Verolelb/ComfyUI-Bionic"
+"Bug Tracker" = "https://github.com/Verolelb/ComfyUI-Bionic/issues"
+
+[tool.comfy]
+PublisherId = "verolelb"
+DisplayName = "Bionic"
