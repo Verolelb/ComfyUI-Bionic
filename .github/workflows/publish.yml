@@ -15,7 +15,20 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v4
+      - name: Check whether this version is already published
+        id: check
+        run: |
+          node=$(sed -n 's/^name = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          echo "Declared: $node $version"
+          if curl -fsS "https://api.comfy.org/nodes/$node/versions/$version" > /dev/null; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "$node $version is already on the registry, nothing to publish."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish Custom Node
+        if: steps.check.outputs.published == 'false'
         uses: Comfy-Org/publish-node-action@main
         with:
           personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
