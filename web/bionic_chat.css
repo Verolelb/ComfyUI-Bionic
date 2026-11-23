@@ -1,5 +1,6 @@
 #bionic-chat-root {
   --bionic-accent: #6ea8fe;
+  --bionic-accent-soft: rgba(110, 168, 254, 0.16);
   --bionic-accent-strong: #3d7dfa;
   --bionic-bg: var(--comfy-menu-bg, #1e1f22);
   --bionic-panel: color-mix(in srgb, var(--comfy-menu-bg, #1e1f22) 92%, #000 8%);
@@ -264,6 +265,12 @@
 .bionic-link:hover {
   color: var(--bionic-fg);
   border-color: var(--bionic-accent);
+}
+
+.bionic-link.active {
+  color: var(--bionic-fg);
+  border-color: var(--bionic-accent);
+  background: var(--bionic-accent-soft, rgba(255, 255, 255, 0.08));
 }
 
 #bionic-attachments {

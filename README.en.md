@@ -30,7 +30,7 @@ A Bionic-style chat right inside ComfyUI: it talks to any local OpenAI-compatibl
 - Documents: ＋ button to attach **PDF**, **DOCX** or text files (TXT, MD, CSV, JSON…), sent to the model as context.
 - Audio input: 🎙 button, microphone recording and local transcription (faster-whisper), with automatic sending of the transcription.
 - Automatic stop of the recording after 2 seconds of silence, with a **microphone level meter** and an **adjustable silence threshold**.
-- `⧉ Copy`, `✎ Edit` and `↻ Resend` buttons under every message: `Copy` puts the whole request (text, images and attached documents) on the clipboard so it can be pasted back unchanged, `Edit` puts the request (text, images, documents) back into the input and drops the following exchanges so you can fix it, `Resend` replays the request exactly.
+- `⧉ Copy`, `✎ Edit`, `↻ Resend` and `🔁 Repeat run` buttons under every message: `Copy` puts the whole request (text, images and attached documents) on the clipboard so it can be pasted back unchanged, `Edit` puts the request (text, images, documents) back into the input and drops the following exchanges so you can fix it, `Resend` replays the request exactly, and `Repeat run` sends it back into the chat after every finished ComfyUI run and runs the new answer, until you click `⏹ Stop`.
 - Token counter **cumulative over the whole conversation**, with the prompt / answer breakdown on hover.
 - ⏹ button to stop the running answer or the workflow it started.
 - ⏏ button to **unload the model** from memory, whatever the server, with an option to unload it automatically after every answer.
@@ -104,7 +104,7 @@ If no **Bionic Chat Prompt** node exists in the graph, it is created automatical
 | `⚡ Run` | sends the text into the node and runs the workflow |
 | `Send` | sends the message to the model |
 
-Any reasoning appears in a collapsible block above the answer, and every answer has a `Copy` button. Under each of your own messages, `✎ Edit` loads the request back into the input — the message and everything after it are removed, so you can fix it and send again — and `↻ Resend` replays the request exactly, images and documents included. The `⧉ Copy` button next to `✎ Edit` copies the entire request — text, images and documents — so pasting it back with `Ctrl+V` restores it unchanged, and pasting it into another app gives you the text plus the document contents.
+Any reasoning appears in a collapsible block above the answer, and every answer has a `Copy` button. Under each of your own messages, `✎ Edit` loads the request back into the input — the message and everything after it are removed, so you can fix it and send again — and `↻ Resend` replays the request exactly, images and documents included. The `⧉ Copy` button next to `✎ Edit` copies the entire request — text, images and documents — so pasting it back with `Ctrl+V` restores it unchanged, and pasting it into another app gives you the text plus the document contents. The `🔁 Repeat run` button turns the request into a loop: every time a ComfyUI run finishes, the request goes back into the chat as if you had just typed it, the model's answer is sent to the workflow straight away, and so on; `⏹ Stop`, a failed run, an interrupted run or an empty answer end the repetition.
 
 ## Audio and silence detection
 

@@ -105,6 +105,17 @@ const I18N = {
     maxTokensHint: "La réponse est coupée à cette longueur : augmente si le texte est tronqué.",
     resend: "↻ Renvoyer",
     resendHint: "Rejouer cette demande à l'identique",
+    repeatRun: "🔁 Répéter",
+    repeatRunHint:
+      "À chaque fin de run, renvoyer cette demande dans le chat puis relancer la nouvelle réponse",
+    repeatStop: "⏹ Arrêter",
+    repeatStopHint: "Couper la répétition automatique",
+    repeatArmed: "Répétition activée : à chaque fin de run, la demande repart dans le chat et la réponse est relancée.",
+    repeatRunning: "Répétition {0} : demande renvoyée dans le chat…",
+    repeatAnswer: "Répétition {0} : réponse du chat relancée",
+    repeatStopped: "Répétition arrêtée.",
+    repeatFailed: "Répétition arrêtée : le dernier run a échoué.",
+    repeatNoAnswer: "Répétition arrêtée : le chat n'a pas rendu de réponse à relancer.",
     edit: "✎ Éditer",
     editHint: "Remettre ce message dans la saisie pour le corriger avant de l'envoyer",
     editLoaded: "Message remis dans la saisie ; les échanges suivants ont été retirés.",
@@ -247,6 +258,16 @@ const I18N = {
     maxTokensHint: "The answer is cut at that length: raise it when the text is truncated.",
     resend: "↻ Resend",
     resendHint: "Send this exact request again",
+    repeatRun: "🔁 Repeat run",
+    repeatRunHint: "After every finished run, send this request into the chat again and run the new answer",
+    repeatStop: "⏹ Stop",
+    repeatStopHint: "Turn the automatic repetition off",
+    repeatArmed: "Repeat armed: after every finished run the request goes back into the chat and its answer is run.",
+    repeatRunning: "Repeat #{0}: request sent into the chat again…",
+    repeatAnswer: "Repeat #{0}: chat answer sent to the workflow",
+    repeatStopped: "Repeat stopped.",
+    repeatFailed: "Repeat stopped: the last run failed.",
+    repeatNoAnswer: "Repeat stopped: the chat gave no answer to run.",
     edit: "✎ Edit",
     editHint: "Put this message back in the input so you can fix it before sending",
     editLoaded: "Message moved back into the input; the following exchanges were removed.",
@@ -331,6 +352,7 @@ const state = {
   abort: null,
   loaded: false,
   targetNodeId: null,
+  repeat: null,
   recording: false,
   recorder: null,
   recStream: null,
@@ -1079,6 +1101,7 @@ function newConversation() {
   state.messages = [];
   state.attachments = [];
   state.documents = [];
+  state.repeat = null;
   state.tokens = { prompt: 0, completion: 0, requests: 0, estimated: false };
   updateTokenCounter(null);
   renderAttachments();
@@ -1154,11 +1177,17 @@ function messageElement(message) {
     resendButton.type = "button";
     resendButton.title = t("resendHint");
     resendButton.addEventListener("click", () => resendMessage(message));
+    const armed = isRepeatArmed(message);
+    const repeatButton = el("button", "bionic-link", armed ? t("repeatStop") : t("repeatRun"));
+    repeatButton.type = "button";
+    repeatButton.title = armed ? t("repeatStopHint") : t("repeatRunHint");
+    if (armed) repeatButton.classList.add("active");
+    repeatButton.addEventListener("click", () => toggleRepeat(message));
     if (state.busy) {
       editButton.disabled = true;
       resendButton.disabled = true;
     }
-    actions.append(copyRequestButton, editButton, resendButton);
+    actions.append(copyRequestButton, editButton, resendButton, repeatButton);
     wrap.appendChild(actions);
   }
 
@@ -1368,6 +1397,7 @@ function editMessage(message) {
   const index = state.messages.indexOf(message);
   if (index === -1) return;
   state.messages.splice(index);
+  if (state.repeat && !state.messages.includes(state.repeat.message)) state.repeat = null;
   state.attachments = (message.images || []).slice();
   state.documents = (message.documents || []).slice();
   state.els.input.value = message.content || "";
@@ -1388,6 +1418,97 @@ function resendMessage(message) {
   renderAttachments();
   autoGrowInput();
   sendMessage();
+}
+
+function isRepeatArmed(message) {
+  return Boolean(state.repeat) && state.repeat.message === message;
+}
+
+function stopRepeat(statusText) {
+  if (!state.repeat) return;
+  state.repeat = null;
+  renderMessages();
+  setStatus(statusText || t("repeatStopped"));
+}
+
+function toggleRepeat(message) {
+  if (isRepeatArmed(message)) {
+    stopRepeat();
+    return;
+  }
+  state.repeat = { message, count: 0, busy: false };
+  renderMessages();
+  setStatus(t("repeatArmed"));
+}
+
+async function queueIsEmpty() {
+  try {
+    const response = await api.fetchApi("/queue", { cache: "no-store" });
+    if (!response.ok) return true;
+    const data = await response.json();
+    return !(data.queue_running?.length || data.queue_pending?.length);
+  } catch {
+    return true;
+  }
+}
+
+async function waitForChatIdle() {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (!state.busy) return true;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return false;
+}
+
+async function maybeAutoRepeat() {
+  const repeat = state.repeat;
+  if (!repeat) return;
+  if (repeat.busy) {
+    repeat.pending = true;
+    return;
+  }
+  repeat.busy = true;
+  try {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (state.repeat !== repeat) return;
+      if (await queueIsEmpty()) break;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (state.repeat !== repeat) return;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    if (state.repeat !== repeat) return;
+    if (!(await waitForChatIdle())) return;
+    if (state.repeat !== repeat) return;
+
+    repeat.count += 1;
+    setStatus(t("repeatRunning", repeat.count));
+
+    const message = repeat.message;
+    const start = state.messages.length;
+    state.els.input.value = message.content || "";
+    state.attachments = (message.images || []).slice();
+    state.documents = (message.documents || []).slice();
+    renderAttachments();
+    autoGrowInput();
+    await sendMessage();
+
+    if (state.repeat !== repeat) return;
+    const answer = state.messages[start + 1];
+    if (!answer || answer.role !== "assistant" || answer.error || answer.aborted || !answer.content) {
+      stopRepeat(t("repeatNoAnswer"));
+      return;
+    }
+    setStatus(t("repeatAnswer", repeat.count));
+    // With automatic running on (the default) the answer was already queued by
+    // sendMessage; only queue it here when that setting is off.
+    if (state.config?.auto_run === false) await runPrompt(answer.content);
+  } finally {
+    repeat.busy = false;
+    if (repeat.pending && state.repeat === repeat) {
+      repeat.pending = false;
+      void maybeAutoRepeat();
+    }
+  }
 }
 
 async function sendMessage() {
@@ -2115,5 +2236,14 @@ app.registerExtension({
     buildPanel();
     state.els.panel.classList.add("bionic-hidden");
     renderMessages();
+    api.addEventListener("execution_success", () => {
+      if (state.repeat?.busy) {
+        state.repeat.pending = true;
+        return;
+      }
+      void maybeAutoRepeat();
+    });
+    api.addEventListener("execution_error", () => stopRepeat(t("repeatFailed")));
+    api.addEventListener("execution_interrupted", () => stopRepeat(t("repeatStopped")));
   },
 });

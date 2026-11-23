@@ -1,6 +1,6 @@
 [project]
 name = "bionic"
-version = "1.0.0"
+version = "1.1.0"
 description = "A chat panel inside ComfyUI: write a request, attach images and documents, then send it to a local llama.cpp server or any OpenAI-compatible endpoint."
 license = { file = "LICENSE" }
 requires-python = ">=3.9"

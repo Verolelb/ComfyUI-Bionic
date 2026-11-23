@@ -32,3 +32,5 @@ jobs:
         uses: Comfy-Org/publish-node-action@main
         with:
           personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
+        env:
+          COMFY_NODE_CHANGELOG: "Repeat run button: after every finished run the request is sent back into the chat and the new answer is run, until you stop it."
