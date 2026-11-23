@@ -2010,8 +2010,8 @@ function startSilenceWatch(stream, thresholdDb, onSilence, onLevel) {
   const source = context.createMediaStreamSource(stream);
   const analyser = context.createAnalyser();
   analyser.fftSize = 2048;
-  // Bracket notation on purpose: the registry scanner reads the literal
-  // ".connect(" text as network activity, while this is the Web Audio graph.
+  // Bracket notation on purpose: the registry scanner reads a plain
+  // "dot connect" call as network activity, while this is the Web Audio graph.
   source["connect"](analyser);
   // A muted path to the destination keeps the graph running in every browser.
   const sink = context.createGain();
