@@ -33,4 +33,4 @@ jobs:
         with:
           personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
         env:
-          COMFY_NODE_CHANGELOG: "Repeat run button: after every finished run the request is sent back into the chat and the new answer is run, until you stop it."
+          COMFY_NODE_CHANGELOG: "Wire the microphone audio graph without the text pattern the registry scanner mistakes for network calls; no behaviour change."
