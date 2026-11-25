@@ -135,6 +135,9 @@ const I18N = {
     promptLoaded: "Prompt « {0} » chargé — clique Enregistrer pour l'appliquer.",
     promptFailed: "Opération impossible : {0}",
     promptsEmpty: "Aucun prompt enregistré",
+    promptSelectTitle: "Prompt système envoyé au modèle",
+    promptCustom: "Prompt personnalisé",
+    promptActive: "Prompt système : « {0} »",
     restartNeeded:
       "Redémarre ComfyUI : le serveur n'a pas reconnu {0} (réglage gardé pour cette session seulement).",
     silenceCountdown: "silence {0}/{1} s",
@@ -287,6 +290,9 @@ const I18N = {
     promptLoaded: "Prompt “{0}” loaded — click Save to apply it.",
     promptFailed: "Could not complete: {0}",
     promptsEmpty: "No saved prompt",
+    promptSelectTitle: "System prompt sent to the model",
+    promptCustom: "Custom prompt",
+    promptActive: "System prompt: “{0}”",
     restartNeeded:
       "Restart ComfyUI: the server did not recognise {0} (kept for this session only).",
     silenceCountdown: "silence {0}/{1} s",
@@ -353,6 +359,7 @@ const state = {
   loaded: false,
   targetNodeId: null,
   repeat: null,
+  prompts: {},
   recording: false,
   recorder: null,
   recStream: null,
@@ -435,6 +442,7 @@ function buildPanel() {
     </header>
     <div class="bionic-model-row">
       <select id="bionic-model" data-i18n-title="modelTitle"></select>
+      <select id="bionic-prompt-select" data-i18n-title="promptSelectTitle"></select>
       <button type="button" class="bionic-icon-btn" id="bionic-unload" data-i18n-title="unloadTitle">⏏</button>
     </div>
     <div id="bionic-messages"></div>
@@ -556,6 +564,7 @@ function collectElements() {
     status: byId("bionic-status"),
     input: byId("bionic-input"),
     model: byId("bionic-model"),
+    promptSelect: byId("bionic-prompt-select"),
     unload: byId("bionic-unload"),
     settings: byId("bionic-settings"),
     mic: byId("bionic-mic"),
@@ -597,6 +606,7 @@ function applyLanguage() {
   const promptName = document.getElementById("bionic-cfg-prompt-name");
   if (promptName) promptName.placeholder = dict.promptNamePlaceholder;
   renderPromptOptions();
+  renderPromptSelect();
 
   if (state.els) {
     state.els.launcher.title = dict.launcherTitle;
@@ -704,6 +714,15 @@ function bindEvents() {
   document.getElementById("bionic-prompt-delete").addEventListener("click", deletePrompt);
   document.getElementById("bionic-cfg-prompt-list").addEventListener("change", (event) => {
     document.getElementById("bionic-cfg-prompt-name").value = event.target.value || "";
+  });
+  els.promptSelect.addEventListener("change", () => {
+    const name = els.promptSelect.value;
+    // The blank entry only reports "not a saved prompt": snap back to the real one.
+    if (!name) {
+      renderPromptSelect();
+      return;
+    }
+    applyPromptName(name);
   });
   document.getElementById("bionic-cfg-silence").addEventListener("input", syncSilenceThresholdLabel);
   els.uiLanguage.addEventListener("change", changeLanguage);
@@ -820,6 +839,7 @@ async function loadConfig() {
     renderModels();
     fillSettings();
     updateWebButton();
+    loadPrompts();
     setStatus(
       data.error
         ? t("lmStudioHint", data.error)
@@ -907,6 +927,60 @@ async function loadPrompts() {
     state.prompts = state.prompts || {};
   }
   renderPromptOptions();
+  renderPromptSelect();
+}
+
+function promptNameForText(text) {
+  const wanted = String(text ?? "").trim();
+  if (!wanted) return "";
+  for (const [name, value] of Object.entries(state.prompts || {})) {
+    if (String(value).trim() === wanted) return name;
+  }
+  return "";
+}
+
+function renderPromptSelect() {
+  const select = state.els?.promptSelect || document.getElementById("bionic-prompt-select");
+  if (!select) return;
+  const names = Object.keys(state.prompts || {}).sort((a, b) => a.localeCompare(b));
+  const current = promptNameForText(state.config?.system_prompt);
+  select.innerHTML = "";
+  if (!names.length) {
+    const option = el("option", null, t("promptsEmpty"));
+    option.value = "";
+    select.appendChild(option);
+    select.disabled = true;
+    return;
+  }
+  select.disabled = false;
+  if (!current) {
+    const option = el("option", null, t("promptCustom"));
+    option.value = "";
+    select.appendChild(option);
+  }
+  for (const name of names) {
+    const option = el("option", null, name);
+    option.value = name;
+    select.appendChild(option);
+  }
+  select.value = current;
+}
+
+async function applyPromptName(name) {
+  const prompts = state.prompts || {};
+  if (!state.config || !name || prompts[name] === undefined) return false;
+  const text = prompts[name];
+  state.config.system_prompt = text;
+  const system = document.getElementById("bionic-cfg-system");
+  if (system) system.value = text;
+  const nameInput = document.getElementById("bionic-cfg-prompt-name");
+  if (nameInput) nameInput.value = name;
+  const list = document.getElementById("bionic-cfg-prompt-list");
+  if (list) list.value = name;
+  const saved = await saveConfig({ system_prompt: text });
+  renderPromptSelect();
+  if (saved) setStatus(t("promptActive", name));
+  return saved;
 }
 
 async function savePrompt() {

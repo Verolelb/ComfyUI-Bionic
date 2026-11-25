@@ -174,6 +174,8 @@ Les réglages sont enregistrés dans `bionic_chat/config.json`, dans le dossier 
 
 Le prompt système se garde sous un nom : saisis le nom à côté du champ, clique 💾, puis retrouve-le dans la liste juste en dessous pour le recharger (`Charger`) ou le supprimer (🗑). Ces prompts nommés sont conservés dans `bionic_chat/prompts.json`.
 
+Ce choix est aussi accessible en haut du panneau : la liste à droite du modèle recharge un prompt nommé d'un seul clic et l'enregistre immédiatement, sans passer par ⚙. Elle affiche « Prompt personnalisé » quand le prompt en cours ne vient d'aucun nom enregistré.
+
 Une valeur déjà enregistrée n'est jamais écrasée : venant d'une version antérieure, le champ des tokens peut encore afficher `4096`, c'est à toi de le relever. Une valeur supérieure à la fenêtre de contexte du modèle fait répondre une erreur au serveur.
 
 **Après une mise à jour du dépôt, redémarre ComfyUI** : le serveur Python doit relire `bionic_server.py` pour accepter les nouveaux réglages. Un simple rafraîchissement de page ne suffit que pour l'interface.

@@ -33,4 +33,4 @@ jobs:
         with:
           personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
         env:
-          COMFY_NODE_CHANGELOG: "Wire the microphone audio graph without the text pattern the registry scanner mistakes for network calls; no behaviour change."
+          COMFY_NODE_CHANGELOG: "System prompt picker in the panel header: a saved prompt is chosen right next to the model and applied at once."

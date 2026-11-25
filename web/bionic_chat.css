@@ -102,6 +102,11 @@
   outline: none;
 }
 
+#bionic-prompt-select {
+  flex: 1.2;
+  text-overflow: ellipsis;
+}
+
 #bionic-messages {
   flex: 1;
   display: flex;

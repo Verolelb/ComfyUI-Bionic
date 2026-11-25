@@ -174,6 +174,8 @@ Settings are saved in `bionic_chat/config.json` inside ComfyUI's user directory.
 
 A system prompt can be kept under a name: type the name next to the field, click 💾, then pick it in the list just below to load it (`Load`) or delete it (🗑). Those named prompts live in `bionic_chat/prompts.json`.
 
+That choice is also available at the top of the panel: the list on the right of the model reloads a named prompt in one click and saves it straight away, without opening ⚙. It shows “Custom prompt” when the current prompt does not come from a saved name.
+
 A value that is already saved is never overwritten: coming from an earlier version, the token field may still show `4096`, and raising it is up to you. A value above the model's context window makes the server return an error.
 
 **After updating the repository, restart ComfyUI**: the Python server has to reload `bionic_server.py` to accept the new settings. Refreshing the page only reloads the interface.
