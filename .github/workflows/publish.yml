@@ -33,4 +33,4 @@ jobs:
         with:
           personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
         env:
-          COMFY_NODE_CHANGELOG: "System prompt picker in the panel header: a saved prompt is chosen right next to the model and applied at once."
+          COMFY_NODE_CHANGELOG: "Settings now open on the system prompt actually in use, so the header picker and the settings panel always show the same prompt."

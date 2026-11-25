@@ -914,7 +914,10 @@ function renderPromptOptions() {
     option.value = name;
     select.appendChild(option);
   }
-  select.value = names.includes(previous) ? previous : names[0];
+  // Open the settings on the prompt that is actually in use, not on the first name.
+  const active = promptNameForText(state.config?.system_prompt);
+  const preferred = names.includes(previous) ? previous : active;
+  select.value = names.includes(preferred) ? preferred : names[0];
 }
 
 async function loadPrompts() {
